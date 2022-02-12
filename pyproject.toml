@@ -9,6 +9,8 @@ license = "MIT"
 python = ">=3.9,<3.10"
 
 numpy = "^1.22.1"
+pyserial = "^3.5"
+python-dotenv = "^0.19.2"
 
 [tool.poetry.dev-dependencies]
 black = "^21.12b0"

@@ -48,8 +48,11 @@ help:  ## Shows the help menu for all targets.
 	@echo ''
 
 # Environment
+.env:  ### Copies the sample environment file to the actual .env file.
+	cp sample.env .env
+
 .PHONY: setup
-setup: setup-venv setup-ipykernel setup-precommit  ## Sets up the development environment.
+setup: .env setup-venv setup-ipykernel setup-precommit  ## Sets up the development environment.
 
 .PHONY: setup-venv
 setup-venv:  ### Sets up the project's development environment.
