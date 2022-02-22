@@ -10,6 +10,7 @@ T = TypeVar("T")
 
 # Defaults
 DEFAULT_BOARD_ARCH = 32
+DEFAULT_BOARD_LITTLE_ENDIAN = True
 
 DEFAULT_SERIAL_INTERVAL = 0.02
 DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
@@ -92,6 +93,8 @@ def get_env_value(
         if raise_ex:
             raise ConfigError(f"Value required for: {env_name}")
         return None
+    elif type_out == bool and isinstance(env_val, str):
+        return env_val.strip().lower() in ("true", "1")  # type: ignore
     return type_out(env_val)  # type: ignore
 
 
@@ -182,6 +185,11 @@ class Config:
             kwargs.get("board_arch", DEFAULT_BOARD_ARCH),
             type_=int,
         )
+        self.board_little_endian: bool = get_env_value(
+            "BOARD_LITTLE_ENDIAN",
+            kwargs.get("board_little_endian", DEFAULT_BOARD_LITTLE_ENDIAN),
+            type_=bool,
+        )
 
         # - Serial connection
         self.serial_interval: float = get_env_value(
@@ -219,4 +227,5 @@ def reload_config(**kwargs: Any) -> None:
     """
     global config
 
+    load_dotenv()
     config = Config(**kwargs)

@@ -34,3 +34,8 @@ class BaseIO(Generic[T_Out, T_In], ABC):
 
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> None:
+        """Closes this I/O object connection."""
+        raise NotImplementedError
