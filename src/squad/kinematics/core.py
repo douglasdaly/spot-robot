@@ -89,7 +89,7 @@ def coord_rotate_xyz(
     y_rotation: Optional[float] = None,
     z_rotation: Optional[float] = None,
     *,
-    angle_format: AngleType = AngleType.DEGREES,
+    angle_type: AngleType = AngleType.DEGREES,
 ) -> Tuple[float, float, float]:
     """Apply a rotation transformation for the given position.
 
@@ -107,7 +107,7 @@ def coord_rotate_xyz(
         The rotation about the Y-axis to apply (in radians, if any).
     z_rotation : float, optional
         The rotation about the Z-axis to apply (in radians, if any).
-    angle_format : AngleType, default=AngleType.DEGREES
+    angle_type : AngleType, default=AngleType.DEGREES
         The format of the given rotation angle inputs
         (:obj:`AngleType.DEGREES`, default) or
         (:obj:`AngleType.RADIANS`).
@@ -124,7 +124,7 @@ def coord_rotate_xyz(
         x_rotation=x_rotation,
         y_rotation=y_rotation,
         z_rotation=z_rotation,
-        angle_format=angle_format,
+        angle_type=angle_type,
     )
     return tuple(x for x in v1)
 
@@ -135,7 +135,7 @@ def coord_rotate(
     y_rotation: Optional[float] = None,
     z_rotation: Optional[float] = None,
     *,
-    angle_format: AngleType = AngleType.DEGREES,
+    angle_type: AngleType = AngleType.DEGREES,
 ) -> np.ndarray:
     """Apply a rotation transformation for the given vector.
 
@@ -149,7 +149,7 @@ def coord_rotate(
         The rotation about the Y-axis to apply (in radians, if any).
     z_rotation : float, optional
         The rotation about the Z-axis to apply (in radians, if any).
-    angle_format : AngleType, default=AngleType.DEGREES
+    angle_type : AngleType, default=AngleType.DEGREES
         The format of the given rotation angle inputs
         (:obj:`AngleType.DEGREES`, default) or
         (:obj:`AngleType.RADIANS`).
@@ -160,7 +160,7 @@ def coord_rotate(
         The new coordinates, as a 3-element vector, of (x, y, z).
 
     """
-    if angle_format == AngleType.DEGREES:
+    if angle_type == AngleType.DEGREES:
         r_xyz = rotation_matrix(
             radians(x_rotation or 0.0),
             radians(y_rotation or 0.0),

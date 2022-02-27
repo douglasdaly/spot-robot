@@ -104,7 +104,7 @@ def compute_leg_angles(
     x: float,
     y: float,
     z: float,
-    angle_format: AngleType = AngleType.DEGREES,
+    angle_type: AngleType = AngleType.DEGREES,
     *,
     l_body: Optional[float] = None,
     w_body: Optional[float] = None,
@@ -128,8 +128,8 @@ def compute_leg_angles(
         The Y coordinate to compute the angles for.
     z : float
         The Z coordinate to compute the angles for.
-    angle_format : AngleType, default=AngleType.DEGREES
-        The format of the angle to return (degrees or radians).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The units of the angle to return (degrees or radians).
     l_body : float, optional
         The total length of the robot body to use (if not given the
         value set in the :obj:`config` will be used).
@@ -188,7 +188,7 @@ def compute_leg_angles(
         y_0,
         z_0,
         x_rotation=-r_alpha,
-        angle_format=AngleType.RADIANS,
+        angle_type=AngleType.RADIANS,
     )
 
     # - Femur (beta)
@@ -197,7 +197,7 @@ def compute_leg_angles(
     # - Leg (gamma)
     r_gamma = _compute_leg_angle(leg, x_1, y_1, z_1, l_b, w_b, l_f, l_l)
 
-    if angle_format == AngleType.DEGREES:
+    if angle_type == AngleType.DEGREES:
         r_alpha = math.degrees(r_alpha)
         r_beta = math.degrees(r_beta)
         r_gamma = math.degrees(r_gamma)
@@ -254,7 +254,7 @@ def compute_foot_position(
     alpha: float,
     beta: float,
     gamma: float,
-    angle_format: AngleType = AngleType.DEGREES,
+    angle_type: AngleType = AngleType.DEGREES,
     *,
     l_body: Optional[float] = None,
     w_body: Optional[float] = None,
@@ -277,8 +277,8 @@ def compute_foot_position(
         The femur angle ($\\beta$) of the leg.
     gamma : float
         The leg angle ($\\gamma$) of the leg.
-    angle_format : AngleType, default=AngleType.DEGREES
-        The format of the angle to return (degrees or radians).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The units of the angle to return (degrees or radians).
     l_body : float, optional
         The total length of the robot body to use (if not given the
         value set in the :obj:`config` will be used).
@@ -312,7 +312,7 @@ def compute_foot_position(
 
     """
     # - Handle inputs
-    if angle_format == AngleType.DEGREES:
+    if angle_type == AngleType.DEGREES:
         alpha = math.radians(alpha)
         beta = math.radians(beta)
         gamma = math.radians(gamma)

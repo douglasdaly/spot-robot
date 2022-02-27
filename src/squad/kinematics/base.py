@@ -13,6 +13,7 @@ class BodyParameters:
         "_frozen",
         "l_body",
         "w_body",
+        "h_body",
         "l_hip",
         "l_femur",
         "l_leg",
@@ -35,6 +36,7 @@ class BodyParameters:
         self._frozen = False
         self.l_body = kwargs.pop("l_body", config.l_body)
         self.w_body = kwargs.pop("w_body", config.w_body)
+        self.h_body = kwargs.pop("h_body", config.h_body)
         self.l_hip = kwargs.pop("l_hip", config.l_hip)
         self.l_femur = kwargs.pop("l_femur", config.l_femur)
         self.l_leg = kwargs.pop("l_leg", config.l_leg)

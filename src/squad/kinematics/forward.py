@@ -3,370 +3,300 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from squad.config import config
-from squad.constants import HALF_PI, Leg
+from squad.constants import HALF_PI, AngleType, Leg
+
+from .base import BodyParameters
+from .core import coord_rotate_xyz
 
 
-def get_rotation_x(roll: float) -> np.ndarray:
-    """Gets the X-rotation matrix ($R_x$) based on the body's `roll`.
-
-    Parameters
-    ----------
-    roll : float
-        The roll angle ($\\omega$) of the main robot body to get the
-        X-rotation matrix for.
-
-    Returns
-    -------
-    np.ndarray
-        The 4x4 $R_x$ matrix to use.
-
-    """
-    r_x = np.identity(4)
-    r_x[1, 1] = math.cos(roll)
-    r_x[1, 2] = -math.sin(roll)
-    r_x[2, 1] = math.sin(roll)
-    r_x[2, 2] = math.cos(roll)
-    return r_x
-
-
-def get_rotation_y(pitch: float) -> np.ndarray:
-    """Gets the Y-rotation matrix ($R_y$) based on the body's `pitch`.
-
-    Parameters
-    ----------
-    pitch : float
-        The pitch angle ($\\psi$) of the main robot body to get the
-        Y-rotation matrix for.
-
-    Returns
-    -------
-    np.ndarray
-        The 4x4 $R_y$ matrix to use.
-
-    """
-    r_y = np.identity(4)
-    r_y[0, 0] = math.cos(pitch)
-    r_y[0, 2] = math.sin(pitch)
-    r_y[2, 0] = -math.sin(pitch)
-    r_y[2, 2] = math.cos(pitch)
-    return r_y
-
-
-def get_rotation_z(yaw: float) -> np.ndarray:
-    """Gets the Z-rotation matrix ($R_z$) based on the body's `yaw`.
-
-    Parameters
-    ----------
-    yaw : float
-        The yaw angle ($\\phi$) of the main robot body to get the
-        Z-rotation matrix for.
-
-    Returns
-    -------
-    np.ndarray
-        The 4x4 $R_z$ matrix to use.
-
-    """
-    r_z = np.identity(4)
-    r_z[0, 0] = math.cos(yaw)
-    r_z[0, 1] = -math.sin(yaw)
-    r_z[1, 0] = math.sin(yaw)
-    r_z[1, 1] = math.cos(yaw)
-    return r_z
-
-
-def get_rotation_xyz(roll: float, pitch: float, yaw: float) -> np.ndarray:
-    """Gets the combined XYZ-rotation matrix ($R_{xyz}$) from the body.
-
-    Parameters
-    ----------
-    roll : float
-        The roll angle ($\\omega$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    pitch : float
-        The pitch angle ($\\psi$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    yaw : float
-        The yaw angle ($\\phi$) of the main robot body to get the
-        XYZ-rotation matrix for.
-
-    Returns
-    -------
-    np.ndarray
-        The 4x4 $R_{xyz}$ matrix to use.
-
-    """
-    r_x = get_rotation_x(roll)
-    r_y = get_rotation_y(pitch)
-    r_z = get_rotation_z(yaw)
-
-    r_xyz = np.matmul(r_x, r_y)
-    np.matmul(r_xyz, r_z, out=r_xyz)
-    return r_xyz
-
-
-def apply_rotation(
-    pos: np.ndarray,
-    roll: float,
-    pitch: float,
-    yaw: float,
-) -> np.ndarray:
-    """Applies a rotation transformation to the given `pos` vector.
-
-    Parameters
-    ----------
-    pos : np.ndarray
-        A 3-element array representing (x, y, z) coordinates to apply
-        the transformation to.
-    roll : float
-        The roll angle ($\\omega$) of the rotation to apply.
-    pitch : float
-        The pitch angle ($\\psi$) of the rotation to apply.
-    yaw : float
-        The yaw angle ($\\phi$) of the rotation to apply.
-
-    Returns
-    -------
-    np.ndarray
-        The transformed coordinates as an array representing (x, y, z).
-
-    """
-    pos_f = np.identity(4)
-    pos_f[0:3, 3] = pos
-    rot_t = get_rotation_xyz(roll, pitch, yaw)
-    return np.outer(rot_t, pos_f)[:3, 0]
-
-
-def get_cm_transform(
-    roll: float,
-    pitch: float,
-    yaw: float,
+def _foot_xyz_hip_frame(
+    hip_theta: float,
+    femur_theta: float,
+    leg_theta: float,
+    body_params: Optional[BodyParameters] = None,
     *,
-    x_m: Optional[float] = None,
-    y_m: Optional[float] = None,
-    z_m: Optional[float] = None,
-) -> np.ndarray:
-    """Gets the main body transformation matrix ($T_m$) to use.
-
-    Parameters
-    ----------
-    roll : float
-        The roll angle ($\\omega$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    pitch : float
-        The pitch angle ($\\psi$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    yaw : float
-        The yaw angle ($\\phi$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    x_m : float, optional
-        The X-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    y_m : float, optioanl
-        The Y-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    z_m : float, optional
-        The Z-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-
-    Returns
-    -------
-    np.ndarray
-        The 4x4 $T_m$ matrix to use.
-
-    """
-    x = x_m if x_m is not None else config.cm_dx
-    y = y_m if y_m is not None else config.cm_dy
-    z = z_m if z_m is not None else config.cm_dz
-
-    return apply_rotation(np.array([x, y, z]), roll, pitch, yaw)
-
-
-def _compute_leg_transform(
-    leg: Leg,
-    t_m: np.ndarray,
-    body_l2: float,
-    body_w2: float,
-) -> np.ndarray:
-    """Helper function to do leg transform matrix calculation."""
-    # - Get leg transform
-    t_leg = np.identity(4)
-    k_pi = HALF_PI if leg in (Leg.FR, Leg.BR) else -HALF_PI
-
-    t_leg[0, 0] = math.cos(k_pi)
-    t_leg[0, 2] = math.sin(k_pi)
-    t_leg[2, 0] = -math.sin(k_pi)
-    t_leg[2, 2] = math.cos(k_pi)
-
-    if leg == Leg.FL:
-        t_leg[0, 3] = body_l2
-        t_leg[2, 3] = -body_w2
-    elif leg == Leg.FR:
-        t_leg[0, 3] = body_l2
-        t_leg[2, 3] = body_w2
-    elif leg == Leg.BL:
-        t_leg[0, 3] = -body_l2
-        t_leg[2, 3] = -body_w2
-    elif leg == Leg.BR:
-        t_leg[0, 3] = -body_l2
-        t_leg[2, 3] = body_w2
+    angle_type: AngleType = AngleType.DEGREES,
+) -> Tuple[float, float, float]:
+    """Gets the X, Y, and Z coordinates of the foot in the hip frame."""
+    b_ps = body_params if body_params is not None else BodyParameters()
+    if angle_type == AngleType.DEGREES:
+        r_h = math.radians(hip_theta)
+        r_f = math.radians(femur_theta + 90.0)
+        r_l = math.radians(leg_theta - 90.0)
     else:
-        raise ValueError(f"Invalid leg specified: {leg}")
+        r_h = hip_theta
+        r_f = femur_theta + HALF_PI
+        r_l = leg_theta - HALF_PI
 
-    # - Compute leg transformation matrix
-    np.matmul(t_m, t_leg, out=t_leg)
-    return t_leg
+    # - Precompute common ones for speed
+    s_h = math.sin(r_h)
+    c_h = math.cos(r_h)
+    c_f = math.cos(r_f)
+    c_fl = math.cos(r_f + r_l)
 
-
-def get_leg_transform(
-    roll: float,
-    pitch: float,
-    yaw: float,
-    leg: Leg,
-    *,
-    x_m: Optional[float] = None,
-    y_m: Optional[float] = None,
-    z_m: Optional[float] = None,
-    l_body: Optional[float] = None,
-    w_body: Optional[float] = None,
-    t_m: Optional[np.ndarray] = None,
-) -> np.ndarray:
-    """Gets a single leg's transformation matrix ($T_{leg}$).
-
-    Parameters
-    ----------
-    roll : float
-        The roll angle ($\\omega$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    pitch : float
-        The pitch angle ($\\psi$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    yaw : float
-        The yaw angle ($\\phi$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    leg : Leg
-        The leg for which to get the transformation matrix.
-    x_m : float, optional
-        The X-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    y_m : float, optioanl
-        The Y-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    z_m : float, optional
-        The Z-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    l_body : float, optional
-        The total length of the robot body to use (if not given the
-        value set in the :obj:`config` will be used).
-    w_body : float, optional
-        The total width of the robot body to use (if not given the value
-        set in the :obj:`config` will be used).
-    t_m : np.ndarray, optional
-        The main body transformation matrix to use (if not given it will
-        be computed).
-
-    Returns
-    -------
-    np.ndarray
-        The leg transformation matrix, $T_{leg}$, requested.
-
-    """
-    # - Get parameters to use
-    if t_m is None:
-        cm_x = x_m if x_m is not None else config.cm_dx
-        cm_y = y_m if y_m is not None else config.cm_dy
-        cm_z = z_m if z_m is not None else config.cm_dz
-        t_cm = get_cm_transform(
-            roll,
-            pitch,
-            yaw,
-            x_m=cm_x,
-            y_m=cm_y,
-            z_m=cm_z,
-        )
-    else:
-        t_cm = t_m
-
-    body_l2 = (l_body if l_body is not None else config.l_body) / 2.0
-    body_w2 = (w_body if w_body is not None else config.w_body) / 2.0
-
-    return _compute_leg_transform(leg, t_cm, body_l2, body_w2)
-
-
-def get_leg_transforms(
-    roll: float,
-    pitch: float,
-    yaw: float,
-    *legs: Leg,
-    x_m: Optional[float] = None,
-    y_m: Optional[float] = None,
-    z_m: Optional[float] = None,
-    l_body: Optional[float] = None,
-    w_body: Optional[float] = None,
-    t_m: Optional[np.ndarray] = None,
-) -> Tuple[np.ndarray, ...]:
-    """Gets multiple leg transformation matrices ($T_{leg}$).
-
-    Parameters
-    ----------
-    roll : float
-        The roll angle ($\\omega$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    pitch : float
-        The pitch angle ($\\psi$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    yaw : float
-        The yaw angle ($\\phi$) of the main robot body to get the
-        XYZ-rotation matrix for.
-    legs: Leg
-        The legs for which to get the transformation matrices.
-    x_m : float, optional
-        The X-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    y_m : float, optioanl
-        The Y-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    z_m : float, optional
-        The Z-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    l_body : float, optional
-        The total length of the robot body to use (if not given the
-        value set in the :obj:`config` will be used).
-    w_body : float, optional
-        The total width of the robot body to use (if not given the value
-        set in the :obj:`config` will be used).
-    t_m : np.ndarray, optional
-        The main body transformation matrix to use (if not given it will
-        be computed).
-
-    Returns
-    -------
-    Tuple[np.ndarray, ...]
-        A tuple of the leg transformation matrices ($T_{leg}) in the
-        same order as the `legs` were given.
-
-    """
-    # - Get parameters to use
-    if t_m is None:
-        cm_x = x_m if x_m is not None else config.cm_dx
-        cm_y = y_m if y_m is not None else config.cm_dy
-        cm_z = z_m if z_m is not None else config.cm_dz
-        t_cm = get_cm_transform(
-            roll,
-            pitch,
-            yaw,
-            x_m=cm_x,
-            y_m=cm_y,
-            z_m=cm_z,
-        )
-    else:
-        t_cm = t_m
-
-    body_l2 = (l_body if l_body is not None else config.l_body) / 2.0
-    body_w2 = (w_body if w_body is not None else config.w_body) / 2.0
-
-    t_legs = tuple(
-        _compute_leg_transform(x, t_cm, body_l2, body_w2) for x in legs
+    # - Compute coordinates
+    x_h = (
+        (b_ps.l_leg * s_h * c_fl)
+        + (b_ps.l_femur * s_h * c_f)
+        + (b_ps.l_hip * c_h)
     )
-    return t_legs
+    y_h = (
+        -(b_ps.l_leg * c_h * c_fl)
+        - (b_ps.l_femur * c_h * c_f)
+        + (b_ps.l_hip * s_h)
+    )
+    z_h = -(b_ps.l_leg * math.sin(r_f + r_l)) - (b_ps.l_femur * math.sin(r_f))
+
+    # - Return in the body's coordinate system (hence the ordering)
+    return z_h, x_h, y_h
+
+
+def hip_xyz(
+    leg: Leg,
+    roll: float,
+    pitch: float,
+    yaw: float,
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> Tuple[float, float, float]:
+    """Gets the current origin of the hip based on the body orientation.
+
+    Parameters
+    ----------
+    leg : Leg
+        The leg to compute the hip coordinate for.
+    roll : float
+        The roll of the main body to compute the hip coordinates for.
+    pitch : float
+        The pitch of the main body to compute the hip coordinates for.
+    yaw : float
+        The yaw of the main body to compute the hip coordinates for.
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
+
+    Returns
+    -------
+    Tuple[float, float, float]
+        The X, Y, and Z coordinates of the hip for the specified `leg`,
+        based on the given angles, in the body's coordinate frame.
+
+    """
+    b_ps = body_params if body_params is not None else BodyParameters()
+    if angle_type == AngleType.DEGREES:
+        r_r = math.radians(roll)
+        r_p = math.radians(-pitch)
+        r_y = math.radians(-yaw)
+    else:
+        r_r = roll
+        r_p = -pitch
+        r_y = -yaw
+
+    # - Modify for leg
+    if leg > 2:
+        d_x = -b_ps.l_body / 2.0
+    else:
+        d_x = b_ps.l_body / 2.0
+
+    if leg % 2 == 0:
+        d_y = -b_ps.w_body / 2.0
+    else:
+        d_y = b_ps.w_body / 2.0
+
+    # - Adjust for orientation
+    return coord_rotate_xyz(
+        d_x + b_ps.cm_dx,
+        d_y + b_ps.cm_dy,
+        b_ps.cm_dz,
+        r_r,
+        r_p,
+        r_y,
+        angle_type=AngleType.RADIANS,
+    )
+
+
+def hip_pos(
+    leg: Leg,
+    orientation: np.ndarray,
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> np.ndarray:
+    """Gets the current origin of the hip based on the body orientation.
+
+    Parameters
+    ----------
+    leg : Leg
+        The leg to compute the hip coordinate for.
+    orientation : np.ndarray
+        An orientation vector of the form (roll, pitch, yaw) for the
+        main body to compute the hip position for.
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
+
+    Returns
+    -------
+    np.ndarray
+        The position vector of the form (X, Y, Z) of the hip for the
+        specified `leg`, based on the given `orientation`, in the body's
+        coordinate frame.
+
+    """
+    return np.array(
+        hip_xyz(
+            leg,
+            orientation[0],
+            orientation[1],
+            orientation[2],
+            body_params=body_params,
+            angle_type=angle_type,
+        )
+    )
+
+
+def foot_xyz(
+    leg: Leg,
+    hip_theta: float,
+    femur_theta: float,
+    leg_theta: float,
+    roll: float = 0.0,
+    pitch: float = 0.0,
+    yaw: float = 0.0,
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> Tuple[float, float, float]:
+    """Gets the X, Y, and Z coordinates of the foot for the given `leg`
+    in the main/body frame.
+
+    Parameters
+    ----------
+    hip_theta : float
+        The rotation angle of the hip joint.
+    femur_theta : float
+        The rotation angle of the femur joint.
+    leg_theta : float
+        The rotation angle of the leg joint.
+    roll : float, default=0.0
+        The current roll of the main body (if any).
+    pitch : float, default=0.0
+        The current pitch of the main body (if any).
+    yaw : float, default=0.0
+        The current yaw of the main body (if any).
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
+
+    Returns
+    -------
+    Tuple[float, float, float]
+        The X, Y, and Z coordinates of the foot, for the given `leg` and
+        angles, in the body's coordinate frame.
+
+    """
+    b_ps = body_params if body_params is not None else BodyParameters()
+    if angle_type == AngleType.DEGREES:
+        r_h = math.radians(hip_theta)
+        r_f = math.radians(femur_theta)
+        r_l = math.radians(leg_theta)
+        r_r = math.radians(roll)
+        r_p = math.radians(pitch)
+        r_y = math.radians(yaw)
+    else:
+        r_h = hip_theta
+        r_f = femur_theta
+        r_l = leg_theta
+        r_r = roll
+        r_p = pitch
+        r_y = yaw
+
+    # - Get hip relative to body
+    x_h, y_h, z_h = hip_xyz(
+        leg,
+        r_r,
+        r_p,
+        r_y,
+        body_params=b_ps,
+        angle_type=AngleType.RADIANS,
+    )
+
+    # - Get foot relative to hip
+    x_f, y_f, z_f = _foot_xyz_hip_frame(
+        r_h,
+        r_f,
+        r_l,
+        body_params=b_ps,
+        angle_type=AngleType.RADIANS,
+    )
+
+    # - Format and return appropriate result
+    if leg % 2 == 0:
+        y_f = -y_f
+    if leg > 2:
+        x_f = -x_f
+    return (x_h + x_f, y_h + y_f, z_h + z_f)
+
+
+def foot_pos(
+    leg: Leg,
+    thetas: np.ndarray,
+    orientation: Optional[np.ndarray] = None,
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> np.ndarray:
+    """Gets the position vector of the foot for the given `leg` in the
+    main/body frame.
+
+    Parameters
+    ----------
+    leg : Leg
+        The leg to compute the position vector for.
+    thetas : np.ndarray
+        The rotation angles of the hip, femur, and leg joints.
+    orientation : np.ndarray
+        An orientation vector of the form (roll, pitch, yaw) for the
+        main body to compute the foot position for.
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
+
+    Returns
+    -------
+    np.ndarray
+        The position vector of X, Y, and Z coordinates of the foot, for
+        the given `leg` and `thetas`, in the body's coordinate frame.
+
+    """
+    if orientation is None:
+        orn = np.array([0.0, 0.0, 0.0])
+    else:
+        orn = orientation
+
+    return np.array(
+        foot_xyz(
+            leg,
+            thetas[0],
+            thetas[1],
+            thetas[2],
+            roll=orn[0],
+            pitch=orn[1],
+            yaw=orn[2],
+            body_params=body_params,
+            angle_type=angle_type,
+        )
+    )

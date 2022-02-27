@@ -12,9 +12,9 @@ T_In = Tuple[float, float, float, float, float, float]
 T_Out = Tuple[float, float, float, float, float, float, float, float, float]
 
 
-class ArduinoIO(BaseIO[T_Out, T_In]):
+class Arduino(BaseIO[T_Out, T_In]):
     """
-    Serial communication for Arduino I/O.
+    Serial communication for Arduino.
     """
 
     def __init__(

@@ -8,11 +8,11 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.{py,rst,ini,ino}]
+[*.{py,rst,ini,ino,c,h,cpp}]
 indent_style = space
 indent_size = 4
 
-[*.{json,yml,yaml}]
+[*.{json,yml,yaml,urdf,xml}]
 indent_style = space
 indent_size = 2
 

@@ -172,51 +172,51 @@ class LegServoState(LegState):
     """
 
     __slots__ = (
-        "_alpha",
-        "_beta",
-        "_gamma",
+        "_hip_theta",
+        "_femur_theta",
+        "_leg_theta",
     )
 
     def __init__(
         self,
         leg: Leg,
-        alpha: float,
-        beta: float,
-        gamma: float,
+        hip_theta: float,
+        femur_theta: float,
+        leg_theta: float,
         **kwargs: Any,
     ) -> None:
         super().__init__(leg, **kwargs)
-        self._alpha = alpha
-        self._beta = beta
-        self._gamma = gamma
+        self._hip_theta = hip_theta
+        self._femur_theta = femur_theta
+        self._leg_theta = leg_theta
 
     @property
-    def alpha(self) -> float:
-        """float: The current alpha angle for this leg (hip servo)."""
-        return self._alpha
+    def hip_theta(self) -> float:
+        """float: The current hip angle for this leg."""
+        return self._hip_theta
 
     @property
-    def beta(self) -> float:
-        """float: The current beta angle for this leg (femur servo)."""
-        return self._beta
+    def femur_theta(self) -> float:
+        """float: The current femur angle for this leg."""
+        return self._femur_theta
 
     @property
-    def gamma(self) -> float:
-        """float: The current gamma angle for this leg (leg servo)."""
-        return self._gamma
+    def leg_theta(self) -> float:
+        """float: The current leg angle for this leg."""
+        return self._leg_theta
 
     def __str_args__(self) -> Tuple[Iterable[Any], Dict[str, Any]]:
         s_args, s_kws = super().__str_args__()
-        s_kws["alpha"] = self._alpha
-        s_kws["beta"] = self._beta
-        s_kws["gamma"] = self._gamma
+        s_kws["hip_theta"] = self._hip_theta
+        s_kws["femur_theta"] = self._femur_theta
+        s_kws["leg_theta"] = self._leg_theta
         return s_args, s_kws
 
     def __repr_args__(self) -> Tuple[Iterable[Any], Dict[str, Any]]:
         r_args, r_kws = super().__repr_args__()
-        r_kws["alpha"] = self._alpha
-        r_kws["beta"] = self._beta
-        r_kws["gamma"] = self._gamma
+        r_kws["hip_theta"] = self._hip_theta
+        r_kws["femur_theta"] = self._femur_theta
+        r_kws["leg_theta"] = self._leg_theta
         return r_args, r_kws
 
 
@@ -508,7 +508,7 @@ class KinematicState(BaseState):
         """Gets servo states corresponding to the given leg/foot states."""
         ret = []
         for leg in legs:
-            t_alpha, t_beta, t_gamma = compute_leg_angles(
+            t_hip, t_femur, t_leg = compute_leg_angles(
                 leg.leg,
                 leg.x,
                 leg.y,
@@ -524,9 +524,9 @@ class KinematicState(BaseState):
             )
             t_servo = LegServoState(
                 leg.leg,
-                t_alpha,
-                t_beta,
-                t_gamma,
+                t_hip,
+                t_femur,
+                t_leg,
                 timestamp=leg.timestamp,
             )
             ret.append(t_servo)
@@ -543,9 +543,9 @@ class KinematicState(BaseState):
         for servo in servos:
             t_x, t_y, t_z = compute_foot_position(
                 servo.leg,
-                servo.alpha,
-                servo.beta,
-                servo.gamma,
+                servo.hip_theta,
+                servo.femur_theta,
+                servo.leg_theta,
                 l_body=body_params.l_body,
                 w_body=body_params.w_body,
                 l_hip=body_params.l_hip,

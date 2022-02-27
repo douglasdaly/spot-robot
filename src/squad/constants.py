@@ -7,6 +7,10 @@ PI = pi
 HALF_PI = PI / 2.0
 
 
+# Physical constants
+GRAVITY = -9.8
+
+
 # Enumerations
 
 

@@ -117,6 +117,7 @@ class Config:
         # - Body dimensions (in mm)
         self.l_body: float = get_env_value("L_BODY", kwargs.get("l_body"))
         self.w_body: float = get_env_value("W_BODY", kwargs.get("w_body"))
+        self.h_body: float = get_env_value("H_BODY", kwargs.get("h_body"))
 
         # - Leg dimensions (in mm)
         self.l_hip: float = get_env_value("L_HIP", kwargs.get("l_hip"))

@@ -1,6 +1,6 @@
-from .arduino_io import ArduinoIO
+from .arduino import Arduino
 
 
 __all__ = [
-    "ArduinoIO",
+    "Arduino",
 ]
