@@ -18,15 +18,17 @@ coverage = "^6.2"
 flake8 = "^4.0.1"
 ipykernel = "^6.7.0"
 isort = "^5.10.1"
+matplotlib = "^3.5.1"
 mypy = "^0.931"
+pandas = "^1.4.1"
 pre-commit = "^2.17.0"
+pybullet = "^3.2.1"
 pytest = "^6.2.5"
 pytest-cov = "^3.0.0"
 pytest-mypy = "^0.8.1"
 pytest-sugar = "^0.9.4"
 Sphinx = "^4.4.0"
 sphinx-material = "^0.0.35"
-pybullet = "^3.2.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

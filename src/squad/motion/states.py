@@ -108,6 +108,14 @@ class LegServoState(LegState):
         r_kws["leg_theta"] = self._leg_theta
         return r_args, r_kws
 
+    def distance(self, other: "LegServoState") -> float:
+        super().distance(other)
+        return (
+            ((self._hip_theta - other._hip_theta) ** 2)
+            + ((self._femur_theta - other._femur_theta) ** 2)
+            + ((self._leg_theta - other._leg_theta) ** 2)
+        ) ** 0.5
+
 
 class LegFootState(LegState):
     """
@@ -161,6 +169,14 @@ class LegFootState(LegState):
         r_kws["y"] = self._y
         r_kws["z"] = self._z
         return r_args, r_kws
+
+    def distance(self, other: "LegFootState") -> float:
+        super().distance(other)
+        return (
+            ((self._x - other._x) ** 2)
+            + ((self._y - other._y) ** 2)
+            + ((self._z - other._z) ** 2)
+        ) ** 0.5
 
 
 class LegStates(Sequence[T_LegState], BaseState):
@@ -240,6 +256,13 @@ class LegStates(Sequence[T_LegState], BaseState):
             leg_cls = LegServoState
         state["legs"] = [leg_cls.from_dict(x) for x in legs]
         return super().__setstate__(state)
+
+    def distance(self, other: "LegStates") -> float:
+        super().distance(other)
+        ret = 0.0
+        for i, v in enumerate(self._legs):
+            ret += v.distance(other._legs[i])
+        return ret / len(self._legs)
 
 
 class KinematicState(BaseState):
@@ -387,6 +410,14 @@ class KinematicState(BaseState):
         state["body"] = BodyParameters.from_dict(state.pop("body"))
 
         return super().__setstate__(state)
+
+    def distance(self, other: "KinematicState") -> float:
+        super().distance(other)
+        return (
+            ((self._x - other._x) ** 2)
+            + ((self._y - other._y) ** 2)
+            + ((self._z - other._z) ** 2)
+        ) ** 0.5
 
     @classmethod
     def _servos_from_feet(
