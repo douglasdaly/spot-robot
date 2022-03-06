@@ -14,6 +14,16 @@ GRAVITY = -9.8
 # Enumerations
 
 
+class Direction(IntEnum):
+    """
+    Enumeration for movement directions.
+    """
+
+    REVERSE = -1
+    NONE = 0
+    FORWARD = 1
+
+
 class Leg(IntEnum):
     """
     Enumeration for leg identification.

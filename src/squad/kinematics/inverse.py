@@ -1,336 +1,249 @@
 import math
 from typing import Optional, Tuple
 
-from squad.config import config
-from squad.constants import PI, AngleType, Leg
+import numpy as np
 
-from .core import coord_rotate_xyz
+from squad.constants import HALF_PI, PI, AngleType, Leg
 
-
-def _compute_hip_angle(
-    leg: Leg,
-    y: float,
-    z: float,
-    w_body: float,
-    l_hip: float,
-) -> float:
-    """Computes the hip angle (alpha)."""
-    if leg in (Leg.FL, Leg.BL):
-        y_t = y + (w_body / 2.0)
-    else:
-        y_t = y - (w_body / 2.0)
-
-    r_alpha = (
-        math.atan2(y_t, z)
-        + math.acos(l_hip / (((z ** 2) + (y_t ** 2)) ** 0.5))
-    ) + (PI / 2.0)
-    return r_alpha
+from .base import BodyParameters
+from .core import rotation_matrix
+from .forward import hip_xyz
 
 
-def _compute_femur_angle(
-    leg: Leg,
+def _leg_thetas_hip_frame(
     x: float,
     y: float,
     z: float,
-    l_body: float,
-    w_body: float,
-    l_femur: float,
-    l_leg: float,
-) -> float:
-    """Computes the femur angle (beta)."""
-    if leg == Leg.FL:
-        x_t = x - (l_body / 2.0)
-        y_t = y - (w_body / 2.0)
-    elif leg == Leg.FR:
-        x_t = x - (l_body / 2.0)
-        y_t = y + (w_body / 2.0)
-    elif leg == Leg.BL:
-        x_t = x + (l_body / 2.0)
-        y_t = y - (w_body / 2.0)
-    elif leg == Leg.BR:
-        x_t = x + (l_body / 2.0)
-        y_t = y + (w_body / 2.0)
-    else:
-        raise ValueError(f"Invalid value for leg: {leg}")
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> Tuple[float, float, float]:
+    """Gets the leg thetas from the foot position in the hip frame."""
+    b_ps = body_params if body_params is not None else BodyParameters()
 
-    t_yz2 = (y_t ** 2) + (z ** 2)
-    t_xyz2 = (x_t ** 2) + t_yz2
+    # - Rotate coordinates back to hip frame
+    r_x = y
+    r_y = z
+    r_z = -x
 
-    r_beta = math.acos(
-        ((l_femur ** 2) + t_xyz2 - (l_leg ** 2)) / (2.0 * l_femur * t_xyz2)
-    ) + math.atan2(x_t, (t_yz2 ** 0.5))
-    return r_beta
+    # - Precompute common values for speed
+    d_h = ((r_x ** 2) + (r_y ** 2) - (b_ps.l_hip ** 2)) ** 0.5
+    d_a = (
+        (r_x ** 2)
+        + (r_y ** 2)
+        + (r_z ** 2)
+        - (b_ps.l_hip ** 2)
+        - (b_ps.l_femur ** 2)
+        - (b_ps.l_leg ** 2)
+    ) / (2.0 * b_ps.l_femur * b_ps.l_leg)
 
-
-def _compute_leg_angle(
-    leg: Leg,
-    x: float,
-    y: float,
-    z: float,
-    l_body: float,
-    w_body: float,
-    l_femur: float,
-    l_leg: float,
-) -> float:
-    """Computes the leg angle (gamma)."""
-    if leg == Leg.FL:
-        x_t = x - (l_body / 2.0)
-        y_t = y - (w_body / 2.0)
-    elif leg == Leg.FR:
-        x_t = x - (l_body / 2.0)
-        y_t = y + (w_body / 2.0)
-    elif leg == Leg.BL:
-        x_t = x + (l_body / 2.0)
-        y_t = y - (w_body / 2.0)
-    elif leg == Leg.BR:
-        x_t = x + (l_body / 2.0)
-        y_t = y + (w_body / 2.0)
-    else:
-        raise ValueError(f"Invalid value for leg: {leg}")
-
-    t_xyz2 = (x_t ** 2) + (y_t ** 2) + (z ** 2)
-
-    r_gamma = (
-        math.acos(
-            ((l_leg ** 2) + (l_femur ** 2) - t_xyz2) / (2.0 * l_leg * l_femur)
+    # - Compute thetas (+ adjustments for our reference frames)
+    t_hip = -math.atan2(-r_y, r_x) - math.atan2(d_h, -b_ps.l_hip) + PI
+    t_leg = math.atan2(-((1.0 - (d_a ** 2)) ** 0.5), d_a)
+    t_femur = (
+        math.atan2(r_z, d_h)
+        - math.atan2(
+            b_ps.l_leg * math.sin(t_leg),
+            b_ps.l_femur + (b_ps.l_leg * math.cos(t_leg)),
         )
-        - PI
+    ) - HALF_PI
+
+    t_leg += HALF_PI
+
+    # - Return
+    t_ret = (t_hip, t_femur, t_leg)
+    if angle_type == AngleType.DEGREES:
+        return tuple(math.degrees(v) for v in t_ret)
+    return t_ret
+
+
+def body_thetas(
+    leg: Leg,
+    x_hip: float,
+    y_hip: float,
+    z_hip: float,
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> Tuple[float, float, float]:
+    """Gets the body orientation based on the given position relative to
+    the specified leg's hip.
+
+    Parameters
+    ----------
+    leg : Leg
+        The leg the hip's position is given for.
+    x_hip : float
+        The X position of the hip's origin (relative to the body's
+        origin).
+    y_hip : float
+        The Y position of the hip's origin (relative to the body's
+        origin).
+    z_hip : float
+        The Z position of the hip's origin (relative to the body's
+        origin).
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
+
+    Returns
+    -------
+    Tuple[float, float, float]
+        The body's orientation (Roll, Pitch, Yaw) based on the position
+        of the given leg's hip.
+
+    """
+    b_ps = body_params if body_params is not None else BodyParameters()
+
+    # - Get neutral positions and radial distance based off leg
+    if leg > 2:
+        n_x = -b_ps.l_body / 2.0
+    else:
+        n_x = b_ps.l_body / 2.0
+
+    if leg % 2 == 0:
+        n_y = -b_ps.w_body / 2.0
+    else:
+        n_y = b_ps.w_body / 2.0
+
+    n_x -= b_ps.cm_dx
+    n_y -= b_ps.cm_dy
+    n_z = -b_ps.cm_dz
+
+    # - Get unit vectors
+    a = np.array([n_x, n_y, n_z])
+    a /= np.linalg.norm(a)
+
+    b = np.array(
+        [(x_hip - b_ps.cm_dx), (y_hip - b_ps.cm_dy), (z_hip - b_ps.cm_dz)]
     )
-    return r_gamma
+    b /= np.linalg.norm(b)
+
+    # - Compute rotation axis and angle
+    v = np.cross(a, b)
+    v /= np.linalg.norm(v)
+
+    v_r = math.acos(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+    # - Compute rotation matrix
+    rot_m = rotation_matrix(v[0] * v_r, v[1] * v_r, v[2] * v_r)
+
+    # - Compute angles with Tait-Bryan convention
+    d = (1.0 - (rot_m[2, 0] ** 2)) ** 0.5
+
+    r_yaw = -math.asin(rot_m[1, 0] / d)
+    r_pitch = -math.asin(-rot_m[2, 0])
+    r_roll = math.asin(rot_m[2, 1] / d)
+
+    r_rpy = (r_roll, r_pitch, r_yaw)
+    if angle_type == AngleType.DEGREES:
+        return tuple(math.degrees(r) for r in r_rpy)
+    return r_rpy
 
 
-def compute_leg_angles(
+def body_orn(
+    leg: Leg,
+    hip_pos: np.ndarray,
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> np.ndarray:
+    """Gets the body orientation based on the given position relative to
+    the specified leg's hip.
+
+    Parameters
+    ----------
+    leg : Leg
+        The leg the hip's position is given for.
+    hip_pos : np.ndarray
+        The coordinates of the hip's origin for the given `leg` as a
+        (X, Y, Z) array/vector.
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
+
+    Returns
+    -------
+    np.ndarray
+        The body's orientation (Roll, Pitch, Yaw) based on the position
+        of the given leg's hip.
+
+    """
+    return np.array(
+        body_thetas(
+            leg,
+            hip_pos[0],
+            hip_pos[1],
+            hip_pos[2],
+            body_params=body_params,
+            angle_type=angle_type,
+        )
+    )
+
+
+def leg_thetas(
     leg: Leg,
     x: float,
     y: float,
     z: float,
-    angle_type: AngleType = AngleType.DEGREES,
+    roll: float = 0.0,
+    pitch: float = 0.0,
+    yaw: float = 0.0,
+    body_params: Optional[BodyParameters] = None,
     *,
-    l_body: Optional[float] = None,
-    w_body: Optional[float] = None,
-    l_hip: Optional[float] = None,
-    l_femur: Optional[float] = None,
-    l_leg: Optional[float] = None,
-    x_m: Optional[float] = None,
-    y_m: Optional[float] = None,
-    z_m: Optional[float] = None,
+    angle_type: AngleType = AngleType.DEGREES,
 ) -> Tuple[float, float, float]:
-    """Computes the hip ($\\alpha$), femur ($\\beta$), and leg
-    ($\\gamma$) angles for the desired position.
+    """Computes the thetas for the given leg and body orientation.
 
     Parameters
     ----------
     leg : Leg
-        The leg (of the foot) for which to compute the angles.
+        The leg to compute the thetas for.
     x : float
-        The X coordinate to compute the angles for.
+        The X-coordinate of the foot to compute the thetas for.
     y : float
-        The Y coordinate to compute the angles for.
+        The Y-coordinate of the foot to compute the thetas for.
     z : float
-        The Z coordinate to compute the angles for.
+        The Z-coordinate of the foot to compute the thetas for.
+    roll : float, default=0.0
+        The body's Roll orientation to compute the thetas for.
+    pitch : float, default=0.0
+        The body's Pitch orientation to compute the thetas for.
+    yaw : float, default=0.0
+        The body's Yaw orientation to compute the thetas for.
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
     angle_type : AngleType, default=AngleType.DEGREES
-        The units of the angle to return (degrees or radians).
-    l_body : float, optional
-        The total length of the robot body to use (if not given the
-        value set in the :obj:`config` will be used).
-    w_body : float, optional
-        The total width of the robot body to use (if not given the value
-        set in the :obj:`config` will be used).
-    l_hip : float, optional
-        The length of the hip assembly (from hip rotation axis center to
-        femur rotation axis center).
-    l_femur : float, optional
-        The length of the femur assembly (from femur rotation axis
-        center to leg rotation axis center).
-    l_leg : float, optional
-        The length of the leg assembly (from leg rotation axis center to
-        foot).
-    x_m : float, optional
-        The X-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    y_m : float, optioanl
-        The Y-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    z_m : float, optional
-        The Z-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
 
     Returns
     -------
     Tuple[float, float, float]
-        The angles computed for the servos of the specified `leg` based
-        on the given position and parameters.
+        The thetas (Hip, Femur, Leg) for the given leg's foot position
+        and body orientation.
 
     """
-    # - Handle inputs
-    l_b = l_body if l_body is not None else config.l_body
-    w_b = w_body if w_body is not None else config.w_body
-
-    l_h = l_hip if l_hip is not None else config.l_hip
-    l_f = l_femur if l_femur is not None else config.l_femur
-    l_l = l_leg if l_leg is not None else config.l_leg
-
-    dm_x = x_m if x_m is not None else config.cm_dx
-    dm_y = y_m if y_m is not None else config.cm_dy
-    dm_z = z_m if z_m is not None else config.cm_dz
-
-    # - Compute common variables
-    x_0 = x - dm_x
-    y_0 = y - dm_y
-    z_0 = z - dm_z
-
-    # - Hip (alpha)
-    r_alpha = _compute_hip_angle(leg, y_0, z_0, w_b, l_h)
-
-    # - Coordinate transform
-    x_1, y_1, z_1 = coord_rotate_xyz(
-        x_0,
-        y_0,
-        z_0,
-        x_rotation=-r_alpha,
-        angle_type=AngleType.RADIANS,
+    # - Get hip coordinates to adjust for hip frame
+    x_h, y_h, z_h = hip_xyz(
+        leg,
+        roll,
+        pitch,
+        yaw,
+        body_params=body_params,
+        angle_type=angle_type,
     )
-
-    # - Femur (beta)
-    r_beta = _compute_femur_angle(leg, x_1, y_1, z_1, l_b, w_b, l_f, l_l)
-
-    # - Leg (gamma)
-    r_gamma = _compute_leg_angle(leg, x_1, y_1, z_1, l_b, w_b, l_f, l_l)
-
-    if angle_type == AngleType.DEGREES:
-        r_alpha = math.degrees(r_alpha)
-        r_beta = math.degrees(r_beta)
-        r_gamma = math.degrees(r_gamma)
-    return (r_alpha, r_beta, r_gamma)
-
-
-def _compute_foot_x(
-    leg: Leg,
-    alpha: float,
-    beta: float,
-    gamma: float,
-    l_body: float,
-    w_body: float,
-    l_hip: float,
-    l_femur: float,
-    l_leg: float,
-) -> float:
-    """Computes the foot X-coordinate for the given angles."""
-    return 0.0
-
-
-def _compute_foot_y(
-    leg: Leg,
-    alpha: float,
-    beta: float,
-    gamma: float,
-    l_body: float,
-    w_body: float,
-    l_hip: float,
-    l_femur: float,
-    l_leg: float,
-) -> float:
-    """Computes the foot Y-coordinate for the given angles."""
-    return 0.0
-
-
-def _compute_foot_z(
-    leg: Leg,
-    alpha: float,
-    beta: float,
-    gamma: float,
-    l_body: float,
-    w_body: float,
-    l_hip: float,
-    l_femur: float,
-    l_leg: float,
-) -> float:
-    """Computes the foot Z-coordinate for the given angles."""
-    return 0.0
-
-
-def compute_foot_position(
-    leg: Leg,
-    alpha: float,
-    beta: float,
-    gamma: float,
-    angle_type: AngleType = AngleType.DEGREES,
-    *,
-    l_body: Optional[float] = None,
-    w_body: Optional[float] = None,
-    l_hip: Optional[float] = None,
-    l_femur: Optional[float] = None,
-    l_leg: Optional[float] = None,
-    x_m: Optional[float] = None,
-    y_m: Optional[float] = None,
-    z_m: Optional[float] = None,
-) -> Tuple[float, float, float]:
-    """Computes the foot position from the given leg angles.
-
-    Parameters
-    ----------
-    leg : Leg
-        The leg (of the foot) for which to compute the angles.
-    alpha : float
-        The hip angle ($\\alpha$) of the leg.
-    beta : float
-        The femur angle ($\\beta$) of the leg.
-    gamma : float
-        The leg angle ($\\gamma$) of the leg.
-    angle_type : AngleType, default=AngleType.DEGREES
-        The units of the angle to return (degrees or radians).
-    l_body : float, optional
-        The total length of the robot body to use (if not given the
-        value set in the :obj:`config` will be used).
-    w_body : float, optional
-        The total width of the robot body to use (if not given the value
-        set in the :obj:`config` will be used).
-    l_hip : float, optional
-        The length of the hip assembly (from hip rotation axis center to
-        femur rotation axis center).
-    l_femur : float, optional
-        The length of the femur assembly (from femur rotation axis
-        center to leg rotation axis center).
-    l_leg : float, optional
-        The length of the leg assembly (from leg rotation axis center to
-        foot).
-    x_m : float, optional
-        The X-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    y_m : float, optioanl
-        The Y-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-    z_m : float, optional
-        The Z-coordinate of the main body's center-of-mass (if not given
-        the value set in the :obj:`config` will be used).
-
-    Returns
-    -------
-    Tuple[float, float, float]
-        The X, Y, and Z-coordinates computed for the servos of the
-        specified `leg` based on the given angles and parameters.
-
-    """
-    # - Handle inputs
-    if angle_type == AngleType.DEGREES:
-        alpha = math.radians(alpha)
-        beta = math.radians(beta)
-        gamma = math.radians(gamma)
-
-    l_b = l_body if l_body is not None else config.l_body
-    w_b = w_body if w_body is not None else config.w_body
-
-    l_h = l_hip if l_hip is not None else config.l_hip
-    l_f = l_femur if l_femur is not None else config.l_femur
-    l_l = l_leg if l_leg is not None else config.l_leg
-
-    dm_x = x_m if x_m is not None else config.cm_dx
-    dm_y = y_m if y_m is not None else config.cm_dy
-    dm_z = z_m if z_m is not None else config.cm_dz
-
-    # - Compute coordinates
-    r_x = _compute_foot_x(leg, alpha, beta, gamma, l_b, w_b, l_h, l_f, l_l)
-    r_y = _compute_foot_y(leg, alpha, beta, gamma, l_b, w_b, l_h, l_f, l_l)
-    r_z = _compute_foot_z(leg, alpha, beta, gamma, l_b, w_b, l_h, l_f, l_l)
-
-    return (r_x + dm_x, r_y + dm_y, r_z + dm_z)
+    return _leg_thetas_hip_frame(
+        x - x_h,
+        y - y_h,
+        z - z_h,
+        body_params=body_params,
+        angle_type=angle_type,
+    )

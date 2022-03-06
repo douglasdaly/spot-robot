@@ -1,7 +1,5 @@
 from abc import ABCMeta
 from collections.abc import Sequence
-from datetime import datetime
-from itertools import chain
 from typing import (
     Any,
     Dict,
@@ -10,130 +8,21 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type,
     TypeVar,
     Union,
 )
 
-from squad.constants import Leg
+from squad.constants import AngleType, Leg
 from squad.exceptions import StateError
+from squad.kinematics.base import BodyParameters
+from squad.kinematics.forward import foot_xyz
+from squad.kinematics.inverse import leg_thetas
 
-from .base import BodyParameters
-from .inverse import compute_foot_position, compute_leg_angles
+from .base import BaseState
 
 
-T = TypeVar("T", bound="BaseState")
 L = TypeVar("L", bound="LegStates")
 T_LegState = TypeVar("T_LegState", bound="LegState")
-
-
-class BaseState(metaclass=ABCMeta):
-    """
-    Base class for state storage objects.
-    """
-
-    __slots__ = ("_timestamp",)
-
-    def __init__(self, *, timestamp: Optional[datetime] = None) -> None:
-        self._timestamp = timestamp or datetime.now()
-
-    @property
-    def timestamp(self) -> datetime:
-        """datetime: The timestamp associated with this state object."""
-        return self._timestamp
-
-    def __str__(self) -> str:
-        s_args, s_kws = self.__str_args__()
-        if s_args or s_kws:
-            arg_str = (
-                "["
-                + ", ".join(
-                    tuple(f"{x}" for x in s_args)
-                    + tuple(f"{k}={v}" for k, v in s_kws.items())
-                )
-                + "]"
-            )
-        else:
-            arg_str = ""
-        return f"<{self.__class__.__name__}{arg_str} @ {self._timestamp}>"
-
-    def __str_args__(self) -> Tuple[List[Any], Dict[str, Any]]:
-        return ([], {})
-
-    def __repr__(self) -> str:
-        r_args, r_kws = self.__repr_args__()
-        r_kws.setdefault("timestamp", self._timestamp)
-        arg_str = ", ".join(
-            tuple(f"{x!r}" for x in r_args)
-            + tuple(f"{k}={v!r}" for k, v in r_kws.items())
-        )
-        return f"{self.__class__.__name__}({arg_str})"
-
-    def __repr_args__(self) -> Tuple[List[Any], Dict[str, Any]]:
-        return ([], {})
-
-    def __lt__(self, other: Any) -> bool:
-        if not isinstance(other, BaseState):
-            raise ValueError(
-                f"Cannot compare {self.__class__.__name__} with:"
-                f" {other.__class__.__name__}"
-            )
-        return self._timestamp < other.timestamp
-
-    def __hash_params__(self) -> Tuple[Any, ...]:
-        return (self.__class__.__name__, self._timestamp)
-
-    def __hash__(self) -> int:
-        hash_params = self.__hash_params__()
-        return hash(hash_params)
-
-    def __getstate__(self) -> Dict[str, Any]:
-        state = {}
-        slot_iter = chain.from_iterable(
-            getattr(x, "__slots__", []) for x in self.__class__.__mro__
-        )
-        for name in (x for x in slot_iter if hasattr(self, x)):
-            k = name.removeprefix("_")
-            v = getattr(self, name)
-            if isinstance(v, BaseState):
-                v = v.__getstate__()
-            state[k] = v
-        return state
-
-    def __setstate__(self, state: Dict[str, Any]) -> None:
-        for k, v in state.items():
-            setattr(self, f"_{k}", v)
-        return
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Converts this state object to a data dictionary.
-
-        Returns
-        -------
-        dict
-            The dictionary representation of this state object's data.
-
-        """
-        return self.__getstate__()
-
-    @classmethod
-    def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
-        """Creates a new state object from the given data.
-
-        Parameters
-        ----------
-        data : dict
-            The data dictionary to use to create the new state object.
-
-        Returns
-        -------
-        T
-            The new state object instance from the given `data`.
-
-        """
-        obj = object.__new__(cls)
-        obj.__setstate__(data)
-        return obj
 
 
 class LegState(BaseState, metaclass=ABCMeta):
@@ -504,23 +393,18 @@ class KinematicState(BaseState):
         cls,
         legs: Sequence[LegFootState],
         body_params: BodyParameters,
+        angle_type: AngleType = AngleType.DEGREES,
     ) -> Sequence[LegServoState]:
         """Gets servo states corresponding to the given leg/foot states."""
         ret = []
         for leg in legs:
-            t_hip, t_femur, t_leg = compute_leg_angles(
+            t_hip, t_femur, t_leg = leg_thetas(
                 leg.leg,
                 leg.x,
                 leg.y,
                 leg.z,
-                l_body=body_params.l_body,
-                w_body=body_params.w_body,
-                l_hip=body_params.l_hip,
-                l_femur=body_params.l_femur,
-                l_leg=body_params.l_leg,
-                x_m=body_params.cm_dx,
-                y_m=body_params.cm_dy,
-                z_m=body_params.cm_dz,
+                body_params=body_params,
+                angle_type=angle_type,
             )
             t_servo = LegServoState(
                 leg.leg,
@@ -537,23 +421,18 @@ class KinematicState(BaseState):
         cls,
         servos: Sequence[LegServoState],
         body_params: BodyParameters,
+        angle_type: AngleType = AngleType.DEGREES,
     ) -> Sequence[LegFootState]:
         """Gets the foot states corresponding to the given servo states."""
         ret = []
         for servo in servos:
-            t_x, t_y, t_z = compute_foot_position(
+            t_x, t_y, t_z = foot_xyz(
                 servo.leg,
                 servo.hip_theta,
                 servo.femur_theta,
                 servo.leg_theta,
-                l_body=body_params.l_body,
-                w_body=body_params.w_body,
-                l_hip=body_params.l_hip,
-                l_femur=body_params.l_femur,
-                l_leg=body_params.l_leg,
-                x_m=body_params.cm_dx,
-                y_m=body_params.cm_dy,
-                z_m=body_params.cm_dz,
+                body_params=body_params,
+                angle_type=angle_type,
             )
             t_foot = LegFootState(
                 servo.leg,
