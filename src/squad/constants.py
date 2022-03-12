@@ -6,6 +6,8 @@ from math import pi
 PI = pi
 HALF_PI = PI / 2.0
 
+LIMIT_LT_1 = 1.0 - 1e-16
+
 
 # Physical constants
 GRAVITY = -9.8

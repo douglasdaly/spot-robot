@@ -1,5 +1,5 @@
-from abc import ABCMeta
 from collections.abc import Sequence
+from datetime import datetime
 from typing import (
     Any,
     Dict,
@@ -12,7 +12,7 @@ from typing import (
     Union,
 )
 
-from squad.constants import AngleType, Leg
+from squad.constants import Leg
 from squad.exceptions import StateError
 from squad.kinematics.base import BodyParameters
 from squad.kinematics.forward import foot_xyz
@@ -25,42 +25,16 @@ L = TypeVar("L", bound="LegStates")
 T_LegState = TypeVar("T_LegState", bound="LegState")
 
 
-class LegState(BaseState, metaclass=ABCMeta):
+class LegState(BaseState):
     """
-    Base class for Leg State data storage.
-    """
-
-    __slots__ = ("_leg",)
-
-    def __init__(self, leg: Leg, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._leg = leg
-
-    @property
-    def leg(self) -> Leg:
-        """Leg: The leg with this state object."""
-        return self._leg
-
-    def __str_args__(self) -> Tuple[Iterable[Any], Dict[str, Any]]:
-        s_args, s_kws = super().__str_args__()
-        s_args.append(self._leg.name)
-        return s_args, s_kws
-
-    def __repr_args__(self) -> Tuple[Iterable[Any], Dict[str, Any]]:
-        r_args, r_kws = super().__repr_args__()
-        r_args.append(self._leg)
-        return r_args, r_kws
-
-    def __hash_params__(self) -> Tuple[Any, ...]:
-        return super().__hash_params__() + (self.leg,)
-
-
-class LegServoState(LegState):
-    """
-    Leg servo state data for one leg of the robot.
+    Leg state data for one leg of the robot.
     """
 
     __slots__ = (
+        "_leg",
+        "_x",
+        "_y",
+        "_z",
         "_hip_theta",
         "_femur_theta",
         "_leg_theta",
@@ -69,15 +43,42 @@ class LegServoState(LegState):
     def __init__(
         self,
         leg: Leg,
+        x: float,
+        y: float,
+        z: float,
         hip_theta: float,
         femur_theta: float,
         leg_theta: float,
         **kwargs: Any,
     ) -> None:
-        super().__init__(leg, **kwargs)
+        super().__init__(**kwargs)
+        self._leg = leg
+        self._x = x
+        self._y = y
+        self._z = z
         self._hip_theta = hip_theta
         self._femur_theta = femur_theta
         self._leg_theta = leg_theta
+
+    @property
+    def leg(self) -> Leg:
+        """Leg: The leg with this state object."""
+        return self._leg
+
+    @property
+    def x(self) -> float:
+        """float: The current X-coordinate of the foot."""
+        return self._x
+
+    @property
+    def y(self) -> float:
+        """float: The current Y-coordinate of the foot."""
+        return self._y
+
+    @property
+    def z(self) -> float:
+        """float: The current Z-coordinate of the foot."""
+        return self._z
 
     @property
     def hip_theta(self) -> float:
@@ -96,6 +97,9 @@ class LegServoState(LegState):
 
     def __str_args__(self) -> Tuple[Iterable[Any], Dict[str, Any]]:
         s_args, s_kws = super().__str_args__()
+        s_kws["x"] = self._x
+        s_kws["y"] = self._y
+        s_kws["z"] = self._z
         s_kws["hip_theta"] = self._hip_theta
         s_kws["femur_theta"] = self._femur_theta
         s_kws["leg_theta"] = self._leg_theta
@@ -103,80 +107,178 @@ class LegServoState(LegState):
 
     def __repr_args__(self) -> Tuple[Iterable[Any], Dict[str, Any]]:
         r_args, r_kws = super().__repr_args__()
+        r_kws["x"] = self._x
+        r_kws["y"] = self._y
+        r_kws["z"] = self._z
         r_kws["hip_theta"] = self._hip_theta
         r_kws["femur_theta"] = self._femur_theta
         r_kws["leg_theta"] = self._leg_theta
         return r_args, r_kws
 
-    def distance(self, other: "LegServoState") -> float:
-        super().distance(other)
-        return (
-            ((self._hip_theta - other._hip_theta) ** 2)
-            + ((self._femur_theta - other._femur_theta) ** 2)
-            + ((self._leg_theta - other._leg_theta) ** 2)
-        ) ** 0.5
+    def __hash_params__(self) -> Tuple[Any, ...]:
+        return super().__hash_params__() + (self.leg,)
 
-
-class LegFootState(LegState):
-    """
-    Leg foot state data for one leg of the robot.
-    """
-
-    __slots__ = (
-        "_x",
-        "_y",
-        "_z",
-    )
-
-    def __init__(
+    def update_position(
         self,
-        leg: Leg,
         x: float,
         y: float,
         z: float,
         **kwargs: Any,
     ) -> None:
-        super().__init__(leg, **kwargs)
+        """Updates the leg's state for the given foot position.
+
+        Parameters
+        ----------
+        x : float
+            The new X-coordinate of the foot to set.
+        y : float
+            The new Y-coordinate of the foot to set.
+        z : float
+            The new Z-coordinate of the foot to set.
+        **kwargs : optional
+            Any additional parameters to pass to the :obj:`leg_thetas`
+            function.
+
+        """
         self._x = x
         self._y = y
         self._z = z
+        self._hip_theta, self._femur_theta, self._leg_theta = leg_thetas(
+            self._leg,
+            x,
+            y,
+            z,
+            **kwargs,
+        )
+        self._timestamp = datetime.now()
 
-    @property
-    def x(self) -> float:
-        """float: The current X-coordinate of the foot."""
-        return self._x
+    def update_orientation(
+        self,
+        hip_theta: float,
+        femur_theta: float,
+        leg_theta: float,
+        **kwargs: Any,
+    ) -> None:
+        """Updates the leg's state for the given servo angles.
 
-    @property
-    def y(self) -> float:
-        """float: The current Y-coordinate of the foot."""
-        return self._y
+        Parameters
+        ----------
+        hip_theta : float
+            The new Hip-angle of the leg to set.
+        femur_theta : float
+            The new Femur-angle of the leg to set.
+        leg_theta : float
+            The new Leg-angle of the leg to set.
+        **kwargs : optional
+            Any additional parameters to pass to the :obj:`foot_xyz`
+            function.
 
-    @property
-    def z(self) -> float:
-        """float: The current Z-coordinate of the foot."""
-        return self._z
+        """
+        self._hip_theta = hip_theta
+        self._femur_theta = femur_theta
+        self._leg_theta = leg_theta
+        self._x, self._y, self._z = foot_xyz(
+            self._leg,
+            hip_theta,
+            femur_theta,
+            leg_theta,
+            **kwargs,
+        )
 
-    def __str_args__(self) -> Tuple[Iterable[Any], Dict[str, Any]]:
-        s_args, s_kws = super().__str_args__()
-        s_kws["x"] = self._x
-        s_kws["y"] = self._y
-        s_kws["z"] = self._z
-        return s_args, s_kws
-
-    def __repr_args__(self) -> Tuple[Iterable[Any], Dict[str, Any]]:
-        r_args, r_kws = super().__repr_args__()
-        r_kws["x"] = self._x
-        r_kws["y"] = self._y
-        r_kws["z"] = self._z
-        return r_args, r_kws
-
-    def distance(self, other: "LegFootState") -> float:
+    def distance(self, other: "LegState") -> float:
         super().distance(other)
         return (
             ((self._x - other._x) ** 2)
             + ((self._y - other._y) ** 2)
             + ((self._z - other._z) ** 2)
         ) ** 0.5
+
+    @classmethod
+    def from_position(
+        cls,
+        leg: Leg,
+        x: float,
+        y: float,
+        z: float,
+        *,
+        timestamp: Optional[datetime] = None,
+        **kwargs: Any,
+    ) -> "LegState":
+        """Creates a new LegState from the given foot position.
+
+        Parameters
+        ----------
+        leg : Leg
+            The leg to create the new state object for.
+        x : float
+            The X-coordinate of the foot to create the new state for.
+        y : float
+            The Y-coordinate of the foot to create the new state for.
+        z : float
+            The Z-coordinate of the foot to create the new state for.
+        timestamp : datetime, optional
+            The timestamp to use for the new state, if any.
+        **kwargs : optional
+            Additional keyword arguments to pass to the
+            :obj:`leg_thetas` function.
+
+        Returns
+        -------
+        LegState
+            The leg state requested, initialized from the given foot
+            position.
+
+        """
+        t_hip, t_femur, t_leg = leg_thetas(leg, x, y, z, **kwargs)
+        return cls(leg, x, y, z, t_hip, t_femur, t_leg, timestamp=timestamp)
+
+    @classmethod
+    def from_thetas(
+        cls,
+        leg: Leg,
+        hip_theta: float,
+        femur_theta: float,
+        leg_theta: float,
+        *,
+        timestamp: Optional[datetime] = None,
+        **kwargs: Any,
+    ) -> "LegState":
+        """Creates a new LegState from the given servo angles.
+
+        Parameters
+        ----------
+        leg : Leg
+            The leg to create the new state object for.
+        hip_theta : float
+            The Hip-angle of the leg to create the new state for.
+        femur_theta : float
+            The Femur-angle of the leg to create the new state for.
+        leg_theta : float
+            The Leg-angle of the leg to create the new state for.
+        timestamp : datetime, optional
+            The timestamp to use for the new state, if any.
+        **kwargs : optional
+            Additional keyword arguments to pass to the :obj:`foot_xyz`
+            function.
+
+        Returns
+        -------
+        LegState
+            The leg state requested, initialized from the given leg
+            servo angles.
+
+        """
+        x, y, z = foot_xyz(leg, hip_theta, femur_theta, leg_theta, **kwargs)
+        return cls(
+            leg,
+            x,
+            y,
+            z,
+            hip_theta,
+            femur_theta,
+            leg_theta,
+            timestamp=timestamp,
+        )
 
 
 class LegStates(Sequence[T_LegState], BaseState):
@@ -250,11 +352,7 @@ class LegStates(Sequence[T_LegState], BaseState):
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         legs: List[Dict[str, Any]] = state.pop("legs")
-        if "x" in legs[0]:
-            leg_cls = LegFootState
-        else:
-            leg_cls = LegServoState
-        state["legs"] = [leg_cls.from_dict(x) for x in legs]
+        state["legs"] = [LegState.from_dict(x) for x in legs]
         return super().__setstate__(state)
 
     def distance(self, other: "LegStates") -> float:
@@ -265,7 +363,7 @@ class LegStates(Sequence[T_LegState], BaseState):
         return ret / len(self._legs)
 
 
-class KinematicState(BaseState):
+class RobotState(BaseState):
     """
     Overall kinematic state data storage for the robot.
     """
@@ -274,8 +372,10 @@ class KinematicState(BaseState):
         "_x",
         "_y",
         "_z",
-        "_feet",
-        "_servos",
+        "_roll",
+        "_pitch",
+        "_yaw",
+        "_leg_states",
         "_body",
     )
 
@@ -284,50 +384,26 @@ class KinematicState(BaseState):
         x: float,
         y: float,
         z: float,
-        foot_states: Optional[Sequence[LegFootState]] = None,
-        servo_states: Optional[Sequence[LegServoState]] = None,
+        roll: float,
+        pitch: float,
+        yaw: float,
+        legs: Sequence[LegState],
         *,
         body_params: Optional[BodyParameters] = None,
-        pre_compute: bool = False,
         **kwargs: Any,
     ) -> None:
         if body_params is None:
             self._body = BodyParameters(**kwargs)
         else:
             self._body = body_params
-
         super().__init__(**kwargs)
         self._x = x
         self._y = y
         self._z = z
-
-        if not foot_states and not servo_states:
-            raise StateError("Must provide one of foot_states or servo_states")
-
-        self._feet: Optional[LegStates[LegFootState]] = None
-        self._servos: Optional[LegStates[LegServoState]] = None
-        if foot_states:
-            if isinstance(foot_states, LegStates):
-                self._feet = foot_states
-            else:
-                self._feet = LegStates(*foot_states, **kwargs)
-            if not servo_states and pre_compute:
-                self._servos = LegStates(
-                    *self._servos_from_feet(foot_states, self._body),
-                    **kwargs,
-                )
-        if servo_states:
-            if isinstance(servo_states, LegStates):
-                self._servos = servo_states
-            else:
-                self._servos = LegStates(*servo_states, **kwargs)
-            self._servos = LegStates(*servo_states, **kwargs)
-            if not foot_states and pre_compute:
-                self._feet = LegStates(
-                    *self._feet_from_servos(servo_states, self._body),
-                    **kwargs,
-                )
-        return
+        self._roll = roll
+        self._pitch = pitch
+        self._yaw = yaw
+        self._leg_states = LegStates(*legs)
 
     @property
     def x(self) -> float:
@@ -345,24 +421,24 @@ class KinematicState(BaseState):
         return self._z
 
     @property
-    def feet(self) -> LegStates[LegFootState]:
-        """LegStates[LegFootState]: The foot state in each leg."""
-        if self._feet is None:
-            self._feet = LegStates(
-                *self._feet_from_servos(self.servos, self._body),
-                timestamp=self.servos.timestamp,
-            )
-        return self._feet
+    def roll(self) -> float:
+        """float: The current Roll-angle of the body."""
+        return self._roll
 
     @property
-    def servos(self) -> LegStates[LegServoState]:
-        """LegStates[LegServoState]: The servo states in each leg."""
-        if self._servos is None:
-            self._servos = LegStates(
-                *self._servos_from_feet(self.feet, self._body),
-                timestamp=self.feet.timestamp,
-            )
-        return self._servos
+    def pitch(self) -> float:
+        """float: The current Pitch-angle of the body."""
+        return self._pitch
+
+    @property
+    def yaw(self) -> float:
+        """float: The current Yaw-angle of the body."""
+        return self._yaw
+
+    @property
+    def legs(self) -> LegStates[LegState]:
+        """LegStates[LegState]: The state of each leg."""
+        return self._leg_states
 
     @property
     def body(self) -> BodyParameters:
@@ -374,6 +450,9 @@ class KinematicState(BaseState):
         s_kws["x"] = self._x
         s_kws["y"] = self._y
         s_kws["z"] = self._z
+        s_kws["roll"] = self._roll
+        s_kws["pitch"] = self._pitch
+        s_kws["yaw"] = self._yaw
         return s_args, s_kws
 
     def __repr_args__(self) -> Tuple[List[Any], Dict[str, Any]]:
@@ -381,96 +460,27 @@ class KinematicState(BaseState):
         r_args.append(self._x)
         r_args.append(self._y)
         r_args.append(self._z)
-        if self._feet:
-            r_kws["foot_states"] = tuple(self._feet)
-        if self._servos:
-            r_kws["servo_states"] = tuple(self._servos)
+        r_args.append(self._roll)
+        r_args.append(self._pitch)
+        r_args.append(self._yaw)
+        r_args.append(tuple(self._leg_states))
         return r_args, r_kws
 
     def __getstate__(self) -> Dict[str, Any]:
         state = super().__getstate__()
-        if not self._feet and "feet" in state:
-            del state["feet"]
-        if not self._servos and "servos" in state:
-            del state["servos"]
+        state["legs"] = self._leg_states.__getstate__()
         state["body"] = self._body.__getstate__()
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
-        if "feet" in state:
-            state["feet"] = LegStates.from_dict(state.pop("feet"))
-        else:
-            state["feet"] = None
-
-        if "servos" in state:
-            state["servos"] = LegStates.from_dict(state.pop("servos"))
-        else:
-            state["servos"] = None
-
+        state["legs"] = LegStates.from_dict(state.pop("legs"))
         state["body"] = BodyParameters.from_dict(state.pop("body"))
-
         return super().__setstate__(state)
 
-    def distance(self, other: "KinematicState") -> float:
+    def distance(self, other: "RobotState") -> float:
         super().distance(other)
         return (
             ((self._x - other._x) ** 2)
             + ((self._y - other._y) ** 2)
             + ((self._z - other._z) ** 2)
         ) ** 0.5
-
-    @classmethod
-    def _servos_from_feet(
-        cls,
-        legs: Sequence[LegFootState],
-        body_params: BodyParameters,
-        angle_type: AngleType = AngleType.DEGREES,
-    ) -> Sequence[LegServoState]:
-        """Gets servo states corresponding to the given leg/foot states."""
-        ret = []
-        for leg in legs:
-            t_hip, t_femur, t_leg = leg_thetas(
-                leg.leg,
-                leg.x,
-                leg.y,
-                leg.z,
-                body_params=body_params,
-                angle_type=angle_type,
-            )
-            t_servo = LegServoState(
-                leg.leg,
-                t_hip,
-                t_femur,
-                t_leg,
-                timestamp=leg.timestamp,
-            )
-            ret.append(t_servo)
-        return ret
-
-    @classmethod
-    def _feet_from_servos(
-        cls,
-        servos: Sequence[LegServoState],
-        body_params: BodyParameters,
-        angle_type: AngleType = AngleType.DEGREES,
-    ) -> Sequence[LegFootState]:
-        """Gets the foot states corresponding to the given servo states."""
-        ret = []
-        for servo in servos:
-            t_x, t_y, t_z = foot_xyz(
-                servo.leg,
-                servo.hip_theta,
-                servo.femur_theta,
-                servo.leg_theta,
-                body_params=body_params,
-                angle_type=angle_type,
-            )
-            t_foot = LegFootState(
-                servo.leg,
-                t_x,
-                t_y,
-                t_z,
-                timestamp=servo.timestamp,
-            )
-            ret.append(t_foot)
-        return ret
