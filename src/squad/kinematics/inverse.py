@@ -247,3 +247,67 @@ def leg_thetas(
         body_params=body_params,
         angle_type=angle_type,
     )
+
+
+def knee_angle_to_leg_servo(
+    leg_theta: float,
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> float:
+    """Converts the given leg/knee angle to the corresponding servo
+    angle.
+
+    Parameters
+    ----------
+    leg_theta : float
+        The leg/knee joint angle to convert to the corresponding servo
+        angle.
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
+
+    Returns
+    -------
+    float
+        The corresponding servo angle based on the given `leg_angle`.
+
+    """
+    b_ps = body_params if body_params is not None else BodyParameters()
+    if angle_type == AngleType.DEGREES:
+        tl = math.radians(90.0 - leg_theta)
+    else:
+        tl = HALF_PI - leg_theta
+
+    # - Pre-compute trig values for speed
+    s_tl = math.sin(tl)
+    c_tl = math.cos(tl)
+
+    # - Compute angle
+    h_adj = math.atan2(-b_ps.h_rod_femur, b_ps.l_rod_femur)
+
+    beta2 = (
+        (b_ps.l_rod_leg ** 2)
+        + (b_ps.l_rod_femur ** 2)
+        - (2.0 * b_ps.l_rod_leg * b_ps.l_rod_femur * c_tl)
+    )
+    beta = beta2 ** 0.5
+
+    phi_opp = math.acos(
+        (leg_theta / abs(leg_theta))
+        * (
+            (beta2 - (b_ps.l_rod ** 2) - (b_ps.l_rod_arm ** 2))
+            / (-2.0 * b_ps.l_rod * b_ps.l_rod_arm)
+        )
+    )
+
+    phi_1 = math.asin((b_ps.l_rod_leg * s_tl) / beta)
+    phi_2 = math.asin((b_ps.l_rod * math.sin(phi_opp)) / beta)
+
+    ret = phi_1 + phi_2 - h_adj - HALF_PI
+    if angle_type == AngleType.DEGREES:
+        return math.degrees(ret)
+    return ret

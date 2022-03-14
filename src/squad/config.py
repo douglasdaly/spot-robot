@@ -134,6 +134,10 @@ class Config:
             "L_ROD_FEMUR",
             kwargs.get("l_rod_femur"),
         )
+        self.h_rod_femur: float = get_env_value(
+            "H_ROD_FEMUR",
+            kwargs.get("h_rod_femur", 0.0),
+        )
         self.l_rod_leg: float = get_env_value(
             "L_ROD_LEG",
             kwargs.get("l_rod_leg"),

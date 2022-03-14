@@ -300,3 +300,64 @@ def foot_pos(
             angle_type=angle_type,
         )
     )
+
+
+def leg_servo_to_knee_angle(
+    servo_theta: float,
+    body_params: Optional[BodyParameters] = None,
+    *,
+    angle_type: AngleType = AngleType.DEGREES,
+) -> float:
+    """Converts the given leg servo angle to the corresponding knee
+    joint angle.
+
+    Parameters
+    ----------
+    servo_theta : float
+        The servo angle to convert to the corresponding knee joint
+        angle.
+    body_params : BodyParameters, optional
+        The parameters describing the robot body (if not provided then
+        the default values from the configuration are used).
+    angle_type : AngleType, default=AngleType.DEGREES
+        The type/units the `alpha`, `beta`, and `gamma` angles are given
+        in, either ``DEGREES`` (default) or ``RADIANS``.
+
+    Returns
+    -------
+    float
+        The corresponding knee angle based on the given `servo_angle`.
+
+    """
+    b_ps = body_params if body_params is not None else BodyParameters()
+    if angle_type == AngleType.DEGREES:
+        ts = math.radians(servo_theta + 90.0)
+    else:
+        ts = servo_theta + HALF_PI
+
+    # - Pre-compute trig values for speed
+    s_ts = math.sin(ts)
+    c_ts = math.cos(ts)
+
+    # - Compute angle
+    h_adj = math.atan2(-b_ps.h_rod_femur, b_ps.l_rod_femur)
+
+    beta2 = (
+        (b_ps.l_rod_arm ** 2)
+        + (b_ps.l_rod_femur ** 2)
+        - (2.0 * b_ps.l_rod_arm * b_ps.l_rod_femur * c_ts)
+    )
+    beta = beta2 ** 0.5
+
+    phi_opp = math.acos(
+        (beta2 - (b_ps.l_rod_leg ** 2) - (b_ps.l_rod ** 2))
+        / (-2.0 * b_ps.l_rod_leg * b_ps.l_rod)
+    )
+
+    phi_1 = math.asin((b_ps.l_rod_arm * s_ts) / beta)
+    phi_2 = math.asin((b_ps.l_rod * math.sin(phi_opp)) / beta)
+
+    ret = HALF_PI - (phi_1 + phi_2 - h_adj)
+    if angle_type == AngleType.DEGREES:
+        return math.degrees(ret)
+    return ret

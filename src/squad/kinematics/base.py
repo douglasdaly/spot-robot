@@ -20,6 +20,7 @@ class BodyParameters:
         "l_rod",
         "l_rod_arm",
         "l_rod_femur",
+        "h_rod_femur",
         "l_rod_leg",
         "cm_dx",
         "cm_dy",
@@ -43,6 +44,7 @@ class BodyParameters:
         self.l_rod = kwargs.pop("l_rod", config.l_rod)
         self.l_rod_arm = kwargs.pop("l_rod_arm", config.l_rod_arm)
         self.l_rod_femur = kwargs.pop("l_rod_femur", config.l_rod_femur)
+        self.h_rod_femur = kwargs.pop("h_rod_femur", config.h_rod_femur)
         self.l_rod_leg = kwargs.pop("l_rod_leg", config.l_rod_leg)
         self.cm_dx = kwargs.pop("cm_dx", config.cm_dx)
         self.cm_dy = kwargs.pop("cm_dy", config.cm_dy)
