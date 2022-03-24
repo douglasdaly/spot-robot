@@ -179,6 +179,8 @@ def foot_xyz(
 
     Parameters
     ----------
+    leg : Leg
+        The leg to compute the foot position for.
     hip_theta : float
         The rotation angle of the hip joint.
     femur_theta : float
