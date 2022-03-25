@@ -44,3 +44,15 @@ class AngleType(IntEnum):
 
     DEGREES = 1
     RADIANS = 2
+
+
+class TimeType(IntEnum):
+    """
+    Enumeration for time durations.
+    """
+
+    MICROSECOND = 1
+    MILLISECOND = 2
+    SECOND = 3
+    MINUTE = 4
+    HOUR = 5
