@@ -1,25 +1,27 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Generic, Optional
+from typing import TYPE_CHECKING, Optional
 
 from squad.constants import Direction, TimeType
 
 
 if TYPE_CHECKING:
-    from .controllers.base import StateController, T
+    from .base import BaseState
+    from .controllers.base import StateController
 
 
-class MotionManager(Generic[T]):
+class Movement:
     """
-    Manages a motion controller to update progress based on timestamps.
+    Manages a controller for a single motion.
     """
 
     def __init__(
         self,
         name: str,
-        controller: StateController,
+        controller: "StateController",
         frequency: float,
-        *,
         time_scale: TimeType = TimeType.SECOND,
+        *,
+        loop: bool = False,
     ) -> None:
         self._name = name
         self._controller = controller
@@ -37,6 +39,7 @@ class MotionManager(Generic[T]):
         else:
             raise ValueError(f"Invalid time scale given: {time_scale}")
 
+        self._loop = loop
         self._last_update = controller.state.timestamp
 
     @property
@@ -57,11 +60,28 @@ class MotionManager(Generic[T]):
     def __hash__(self) -> int:
         return hash((self.__class__.__name__, self._name))
 
+    def start(self, ts: Optional[datetime] = None) -> None:
+        """Starts this movement by setting the initial timestamp.
+
+        Parameters
+        ----------
+        ts : datetime, optional
+            The timestamp to set as the current last update time used as
+            the basis for subsequent update calls (if not provided the
+            current datetime is used).
+
+        """
+        if ts is None:
+            self._last_update = datetime.now()
+        else:
+            self._last_update = ts
+        return
+
     def update(
         self,
         ts: Optional[datetime] = None,
         direction: Optional[Direction] = None,
-    ) -> T:
+    ) -> "BaseState":
         """Updates the motion controller based on the given timestamp.
 
         Parameters
@@ -86,7 +106,22 @@ class MotionManager(Generic[T]):
             c_ts = datetime.now()
         else:
             c_ts = ts
+
         d_p = (c_ts - self._last_update).total_seconds() * self._freq
         next_state = self._controller.increment(d_p, direction)
+
+        if self._loop and not (0.0 <= self._controller.progress <= 1.0):
+            if self._controller.direction == Direction.FORWARD:
+                new_dir = Direction.REVERSE
+                new_prog = 1.0
+            else:
+                new_dir = Direction.FORWARD
+                new_prog = 0.0
+            self._controller.reset(
+                next_state,
+                direction=new_dir,
+                progress=new_prog,
+            )
+
         self._last_update = c_ts
         return next_state

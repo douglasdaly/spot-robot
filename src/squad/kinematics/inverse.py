@@ -240,9 +240,19 @@ def leg_thetas(
         body_params=body_params,
         angle_type=angle_type,
     )
+
+    if leg % 2 == 0:
+        y_f = -y + y_h
+    else:
+        y_f = y - y_h
+    if leg > 2:
+        x_f = -x + x_h
+    else:
+        x_f = x - x_h
+
     return _leg_thetas_hip_frame(
-        x - x_h,
-        y - y_h,
+        x_f,
+        y_f,
         z - z_h,
         body_params=body_params,
         angle_type=angle_type,
@@ -297,7 +307,7 @@ def knee_angle_to_leg_servo(
     beta = beta2 ** 0.5
 
     phi_opp = math.acos(
-        (leg_theta / abs(leg_theta))
+        np.sign(leg_theta)
         * (
             (beta2 - (b_ps.l_rod ** 2) - (b_ps.l_rod_arm ** 2))
             / (-2.0 * b_ps.l_rod * b_ps.l_rod_arm)

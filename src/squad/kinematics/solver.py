@@ -1,6 +1,7 @@
+import math
 from typing import Optional, Tuple
 
-from squad.constants import AngleType, Leg
+from squad.constants import HALF_PI, AngleType, Leg
 
 from .base import BodyParameters
 from .forward import foot_xyz, hip_xyz, leg_servo_to_knee_angle
@@ -21,6 +22,21 @@ class KinematicSolver:
             self._body = BodyParameters()
         else:
             self._body = body_params
+
+        deg_bounds = (
+            (self._body.leg_alpha_min, self._body.leg_alpha_max),
+            (self._body.leg_beta_min, self._body.leg_beta_max),
+            (self._body.leg_gamma_min, self._body.leg_gamma_max),
+        )
+        if angle_type == AngleType.DEGREES:
+            self._angle_bnds = deg_bounds
+            self._angle_90d = 90.0
+        else:
+            self._angle_bnds = tuple(
+                (math.radians(t_min), math.radians(t_max))
+                for t_min, t_max in deg_bounds
+            )
+            self._angle_90d = HALF_PI
         self._angle_type = angle_type
 
     def foot_fwd(
@@ -83,6 +99,8 @@ class KinematicSolver:
         roll: float = 0.0,
         pitch: float = 0.0,
         yaw: float = 0.0,
+        *,
+        knee_angle: bool = False,
     ) -> Tuple[float, float, float]:
         """Computes the servo thetas for the given foot position.
 
@@ -102,6 +120,10 @@ class KinematicSolver:
             The body's Pitch orientation to compute the thetas for.
         yaw : float, default=0.0
             The body's Yaw orientation to compute the thetas for.
+        knee_angle : bool, default=False
+            Whether or not to convert the knee angle to the leg servo
+            angle (``False``, default) or just return the unadjusted
+            knee angle (``True``).
 
         Returns
         -------
@@ -121,12 +143,24 @@ class KinematicSolver:
             body_params=self._body,
             angle_type=self._angle_type,
         )
-        t_leg = knee_angle_to_leg_servo(
-            t_knee,
-            body_params=self._body,
-            angle_type=self._angle_type,
+        if not knee_angle:
+            t_leg = knee_angle_to_leg_servo(
+                t_knee,
+                body_params=self._body,
+                angle_type=self._angle_type,
+            )
+            ang_bnds = self._angle_bnds
+        else:
+            t_leg = t_knee
+            ang_bnds = (
+                self._angle_bnds[0],
+                self._angle_bnds[1],
+                (-self._angle_90d, self._angle_90d),
+            )
+        return tuple(
+            min(max(t, b_min), b_max)
+            for t, (b_min, b_max) in zip((t_hip, t_femur, t_leg), ang_bnds)
         )
-        return (t_hip, t_femur, t_leg)
 
     def hip_fwd(
         self,

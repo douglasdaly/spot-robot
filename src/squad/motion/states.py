@@ -339,10 +339,10 @@ class LegStates(Sequence[T_LegState], BaseState):
         return len(self._legs)
 
     def __getitem__(self, leg: Union[int, Leg]) -> T_LegState:
-        if isinstance(leg, int):
-            l_idx = leg
+        if isinstance(leg, Leg):
+            l_idx = leg.value - 1
         else:
-            l_idx = leg - 1
+            l_idx = leg
         return self._legs[l_idx]
 
     def __getstate__(self) -> Dict[str, Any]:
