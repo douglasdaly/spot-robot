@@ -17,12 +17,17 @@ from squad.motion.states import RobotState
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 
+NEUTRAL_ANGLES = (0.0, -35.0, 10.0)
+
 DEFAULT_N_STEPS = 10000
 DEFAULT_TIME_STEP = 1.0 / 240.0
-DEFAULT_FOOT_FRICTION = 1e-5
+DEFAULT_FRICTION = 1e-5
+DEFAULT_FOOT_FRICTION = 1e-6
+DEFAULT_SERVO_TORQUE = 5.0
 
 BODY_ID: int = 0
 JOINT_IDS: Dict[str, int] = {}
+FOOT_IDS: Dict[str, int] = {}
 
 
 # Command-line
@@ -169,7 +174,12 @@ def configure(
         )
 
     # - Load plane/base
-    p.loadURDF("plane.urdf")
+    plane_id = p.loadURDF("plane.urdf")
+    p.changeDynamics(
+        plane_id,
+        -1,
+        lateralFriction=DEFAULT_FRICTION,
+    )
 
 
 def setup(
@@ -179,7 +189,7 @@ def setup(
     *,
     foot_friction: Optional[float] = None,
     fixed: bool = True,
-) -> Tuple[int, Dict[str, int]]:
+) -> Tuple[int, Dict[str, int], Dict[str, int]]:
     """Sets up the URDF body in the PyBullet simulation."""
     foot_friction = (
         foot_friction if foot_friction is not None else DEFAULT_FOOT_FRICTION
@@ -191,16 +201,28 @@ def setup(
 
     # - Get joint data
     joint_ids = {}
+    foot_ids = {}
     for i in range(p.getNumJoints(obj_id)):
         j_info = p.getJointInfo(obj_id, i)
         j_name = j_info[1].decode("utf-8")
         j_type = j_name.split("_")[-1]
         if j_type in ("foot", "knee", "shoulder"):
-            p.changeDynamics(
-                obj_id,
-                i,
-                lateralFriction=foot_friction,
-            )
+            if j_type == "foot":
+                foot_ids[j_name[:2].upper()] = j_info[0]
+                p.changeDynamics(
+                    obj_id,
+                    i,
+                    linearDamping=0,
+                    angularDamping=0,
+                    lateralFriction=foot_friction,
+                    restitution=0,
+                )
+            else:
+                p.changeDynamics(
+                    obj_id,
+                    i,
+                    lateralFriction=DEFAULT_FRICTION,
+                )
         else:
             # - Servo joint
             p.changeDynamics(
@@ -228,7 +250,7 @@ def setup(
         _, curr_orn = p.getBasePositionAndOrientation(obj_id)
         p.resetBasePositionAndOrientation(obj_id, start_pos, curr_orn)
 
-    return obj_id, joint_ids
+    return obj_id, joint_ids, foot_ids
 
 
 def move_joint(
@@ -252,7 +274,7 @@ def move_joint(
             joint_id,
             p.POSITION_CONTROL,
             targetPosition=math.radians(angle),
-            force=2.0,
+            force=DEFAULT_SERVO_TORQUE,
         )
     return
 
@@ -277,6 +299,9 @@ def update_env(
                 leg.x,
                 leg.y,
                 leg.z,
+                state.roll,
+                state.pitch,
+                state.yaw,
                 knee_angle=True,
             )
 
@@ -291,10 +316,27 @@ def update_env(
     return
 
 
+def update_state(state: sqm.states.RobotState) -> None:
+    """Updates the RPY of the robot's state from the environment."""
+    curr_pos, curr_orn = p.getBasePositionAndOrientation(BODY_ID)
+    curr_rpy = p.getEulerFromQuaternion(curr_orn)
+
+    p_x, p_y, p_z = curr_pos
+    o_r, o_p, o_y = curr_rpy
+
+    state._x = p_x * 1000.0
+    state._y = p_y * 1000.0
+    state._z = p_z * 1000.0
+    state._roll = math.degrees(o_r)
+    state._pitch = -math.degrees(o_p)
+    state._yaw = math.degrees(o_y)
+
+
 def print_state(
     state: sqm.states.RobotState,
     title: Optional[str] = None,
     timestamp: Optional[datetime] = None,
+    include_env: bool = False,
 ) -> None:
     """Output the robot state to the console."""
     leg_lines = [
@@ -311,10 +353,29 @@ def print_state(
         ts_str = timestamp.strftime("%H:%M:%S.%f")
         p_title += f" @ {ts_str}"
 
+    if include_env:
+        eleg_lines = []
+        for x in state.legs:
+            t_fid = FOOT_IDS[x.leg.name.upper()]
+            t_f_state = p.getLinkState(BODY_ID, t_fid)
+            t_pos = t_f_state[4]
+            eleg_lines.append(
+                f"- {x.leg.name.upper()} = ({1000.0 * t_pos[0]:.1f},"
+                f" {1000.0 * t_pos[1]:.1f}, {1000.0 * t_pos[2]:.1f})"
+            )
+    else:
+        eleg_lines = None
+
     print(p_title)
     print("=" * len(p_title))
+    print(f"Pos: ({state.x:.1f}, {state.y:.1f}, {state.z:.1f})")
+    print(f"Orn: ({state.roll:.1f}, {state.pitch:.1f}, {state.yaw:.1f})")
     for ll in leg_lines:
         print(ll)
+    if eleg_lines:
+        print("PyBullet Feet:")
+        for el in eleg_lines:
+            print(el)
     print()
 
 
@@ -385,7 +446,7 @@ def get_movements(
 ) -> List[sqm.Movement]:
     """Gets the movement to execute with the given `name`."""
     if name == "neutral":
-        angs = (0.0, -35.0, 20.0)
+        angs = NEUTRAL_ANGLES
         m_ctrls = [
             sqm.controllers.LegLinearThetas(state.legs.fl, *angs),
             sqm.controllers.LegLinearThetas(state.legs.fr, *angs),
@@ -440,7 +501,100 @@ def get_movements(
             sqm.Movement(
                 f"{x.state.leg.name.lower()}_m_{name}",
                 x,
-                3.0,
+                1.0,
+                TimeType.SECOND,
+                loop=loop,
+            )
+            for x in m_ctrls
+        ]
+    elif name == "step":
+        # - Single step
+        d_x = 20.0
+        d_y = 25.0
+        d_z = 35.0
+        fl_pts = [
+            (d_x, d_y, d_z),
+            (d_x, d_y, d_z),
+            (d_x, -d_y, -d_z),
+            (d_x, -d_y, -d_z),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+        ]
+        fr_pts = [
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (d_x, -d_y, d_z),
+            (d_x, -d_y, d_z),
+            (d_x, d_y, -d_z),
+            (d_x, d_y, -d_z),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+        ]
+        bl_pts = [
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (d_x, d_y, d_z),
+            (d_x, d_y, d_z),
+            (d_x, -d_y, -d_z),
+            (d_x, -d_y, -d_z),
+        ]
+        br_pts = [
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (d_x, -d_y, d_z),
+            (d_x, -d_y, d_z),
+            (d_x, d_y, -d_z),
+            (d_x, d_y, -d_z),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+        ]
+        m_ctrls = [
+            sqm.controllers.LegBezierDeltas(state.legs.fl, fl_pts),
+            sqm.controllers.LegBezierDeltas(state.legs.fr, fr_pts),
+            sqm.controllers.LegBezierDeltas(state.legs.bl, bl_pts),
+            sqm.controllers.LegBezierDeltas(state.legs.br, br_pts),
+        ]
+        return [
+            sqm.Movement(
+                f"{x.state.leg.name.lower()}_m_{name}",
+                x,
+                6.0,
                 TimeType.MINUTE,
                 loop=loop,
             )
@@ -478,7 +632,7 @@ if __name__ == "__main__":
         do_fixed = True
 
     # - Create robot state object & solver
-    init_angs = (0.0, -35.0, 20.0)
+    init_angs = NEUTRAL_ANGLES
     robot_state = sqm.states.RobotState(
         0.0,
         0.0,
@@ -496,7 +650,8 @@ if __name__ == "__main__":
     robot_kms = KinematicSolver(robot_state.body)
 
     if not do_fixed:
-        init_height = -min(x.z for x in robot_state.legs) + 1.0
+        init_height = -min(x.z for x in robot_state.legs)
+        init_height -= 75.0 / 2.0
         init_height /= 1000.0
     else:
         init_height = 0.5
@@ -504,7 +659,7 @@ if __name__ == "__main__":
     # - Setup PyBullet & load body
     configure(args.time_step, realtime=do_rt, gravity=args.gravity)
 
-    BODY_ID, JOINT_IDS = setup(
+    BODY_ID, JOINT_IDS, FOOT_IDS = setup(
         fname,
         robot_state,
         start_pos=[0.0, 0.0, init_height],
@@ -542,7 +697,30 @@ if __name__ == "__main__":
     if args.warm_up:
         time.sleep(args.warm_up)
 
-    # - Prepare simulation loop
+    # - If not fixed start simulation to neutral
+    if not do_fixed:
+        neutral_mvmts = get_movements("neutral", robot_state)
+        for n_mvmt in neutral_mvmts:
+            n_mvmt.start()
+
+        at_neutral = False
+        while not at_neutral:
+            c_ts = datetime.now()
+            for n_mvmt in neutral_mvmts:
+                n_mvmt.update(c_ts)
+
+            update_env(robot_state, robot_kms)
+            p.stepSimulation()
+            update_state(robot_state)
+
+            if not do_rt:
+                time.sleep(DEFAULT_TIME_STEP)
+
+            at_neutral = all(
+                x._controller.progress >= 1.0 for x in neutral_mvmts
+            )
+
+    # - Prepare main simulation loop
     def _while_cond_ns(_: int) -> bool:
         return True
 
@@ -569,6 +747,7 @@ if __name__ == "__main__":
 
         update_env(robot_state, robot_kms)
         p.stepSimulation()
+        update_state(robot_state)
 
         if out_path:
             if do_rt:
@@ -619,18 +798,45 @@ if __name__ == "__main__":
         if do_rt:
             p_delta = (datetime.now() - last_print).total_seconds()
             if p_delta >= args.print_interval:
-                print_state(robot_state, timestamp=m_ts)
+                print_state(robot_state, timestamp=m_ts, include_env=True)
                 print_movements(movements)
                 print()
                 last_print = datetime.now()
         else:
             if i % (round(1.0 / DEFAULT_TIME_STEP) * args.print_interval) == 0:
-                print_state(robot_state, timestamp=m_ts)
+                print_state(robot_state, timestamp=m_ts, include_env=True)
                 print_movements(movements)
                 print()
 
             time.sleep(DEFAULT_TIME_STEP)
 
+        if all(x._controller.progress >= 1.0 for x in movements):
+            break
+
         i += 1
+
+    # - Back to neutral
+    neutral_mvmts = get_movements("neutral", robot_state)
+    for n_mvmt in neutral_mvmts:
+        n_mvmt.start()
+
+    at_neutral = False
+    while not at_neutral:
+        c_ts = datetime.now()
+        for n_mvmt in neutral_mvmts:
+            n_mvmt.update(c_ts)
+
+        update_env(robot_state, robot_kms)
+        p.stepSimulation()
+        update_state(robot_state)
+
+        if not do_rt:
+            time.sleep(DEFAULT_TIME_STEP)
+
+        at_neutral = all(x._controller.progress >= 1.0 for x in neutral_mvmts)
+
+    print_state(robot_state, timestamp=m_ts, include_env=True)
+
+    time.sleep(5.0)
 
     p.disconnect()

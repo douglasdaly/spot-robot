@@ -245,8 +245,6 @@ def foot_xyz(
     # - Format and return appropriate result
     if leg % 2 == 0:
         y_f = -y_f
-    if leg > 2:
-        x_f = -x_f
     return (x_h + x_f, y_h + y_f, z_h + z_f)
 
 

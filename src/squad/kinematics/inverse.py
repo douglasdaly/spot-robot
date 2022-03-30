@@ -242,21 +242,18 @@ def leg_thetas(
     )
 
     if leg % 2 == 0:
-        y_f = -y + y_h
+        y_f = y_h - y
     else:
         y_f = y - y_h
-    if leg > 2:
-        x_f = -x + x_h
-    else:
-        x_f = x - x_h
 
-    return _leg_thetas_hip_frame(
-        x_f,
+    r_h, r_f, r_l = _leg_thetas_hip_frame(
+        x - x_h,
         y_f,
         z - z_h,
         body_params=body_params,
         angle_type=angle_type,
     )
+    return r_h, r_f, r_l
 
 
 def knee_angle_to_leg_servo(

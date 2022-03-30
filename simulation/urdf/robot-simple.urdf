@@ -172,7 +172,7 @@
     </collision>
 
     <inertial>
-      <mass value="0.005" />
+      <mass value="0.001" />
       <inertia
         ixx="1.0E-05" ixy="1.0E-09" ixz="1.0E-09"
         iyy="1.0E-05" iyz="1.0E-09"
@@ -344,7 +344,7 @@
     </collision>
 
     <inertial>
-      <mass value="0.005" />
+      <mass value="0.001" />
       <inertia
         ixx="1.0E-05" ixy="1.0E-09" ixz="1.0E-09"
         iyy="1.0E-05" iyz="1.0E-09"
@@ -516,7 +516,7 @@
     </collision>
 
     <inertial>
-      <mass value="0.005" />
+      <mass value="0.001" />
       <inertia
         ixx="1.0E-05" ixy="1.0E-09" ixz="1.0E-09"
         iyy="1.0E-05" iyz="1.0E-09"
@@ -688,7 +688,7 @@
     </collision>
 
     <inertial>
-      <mass value="0.005" />
+      <mass value="0.001" />
       <inertia
         ixx="1.0E-05" ixy="1.0E-09" ixz="1.0E-09"
         iyy="1.0E-05" iyz="1.0E-09"
