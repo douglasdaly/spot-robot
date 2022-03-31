@@ -1,5 +1,6 @@
 from enum import IntEnum
 from math import pi
+from typing import Dict
 
 
 # Math constants
@@ -56,3 +57,12 @@ class TimeType(IntEnum):
     SECOND = 3
     MINUTE = 4
     HOUR = 5
+
+
+TIME_CONVERSION_FACTORS: Dict[TimeType, float] = {
+    TimeType.MICROSECOND: 10e6,
+    TimeType.MILLISECOND: 10e3,
+    TimeType.SECOND: 1.0,
+    TimeType.MINUTE: 1.0 / 60.0,
+    TimeType.HOUR: 1.0 / (60.0 * 60.0),
+}

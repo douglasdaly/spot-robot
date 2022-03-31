@@ -3,6 +3,7 @@ import argparse
 from datetime import datetime
 import math
 import os
+import signal
 import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -25,6 +26,8 @@ DEFAULT_FRICTION = 1e-5
 DEFAULT_FOOT_FRICTION = 1e-6
 DEFAULT_SERVO_TORQUE = 5.0
 
+KEEP_GOING = True
+
 BODY_ID: int = 0
 JOINT_IDS: Dict[str, int] = {}
 FOOT_IDS: Dict[str, int] = {}
@@ -44,11 +47,25 @@ parser.add_argument(
 
 # - Options
 parser.add_argument(
+    "-r",
+    "--repeat",
+    dest="repeat",
+    action="store_true",
+    help="Whether or not to repeat the movement after finishing.",
+)
+parser.add_argument(
     "-l",
     "--loop",
     dest="loop",
     action="store_true",
     help="Whether or not the movement should be set to loop.",
+)
+parser.add_argument(
+    "-en",
+    "--end-neutral",
+    dest="end_neutral",
+    action="store_true",
+    help="Whether or not to go back to neutral stance after moving.",
 )
 parser.add_argument(
     "-i",
@@ -110,7 +127,7 @@ parser.add_argument(
     help="Number of simulation steps to use.",
 )
 parser.add_argument(
-    "-r",
+    "-rt",
     "--real-time",
     dest="realtime",
     action="store_true",
@@ -131,7 +148,18 @@ parser.add_argument(
 )
 
 
-# Functions
+# Control functions
+
+
+def sigint_handler(sig, frame) -> None:
+    """SIGINT handler function."""
+    global KEEP_GOING
+
+    print("\nShutting down...\n", flush=True)
+    KEEP_GOING = False
+
+
+# Simulation Functions
 
 
 def configure(
@@ -332,10 +360,13 @@ def update_state(state: sqm.states.RobotState) -> None:
     state._yaw = math.degrees(o_y)
 
 
+# - Helper functions
+
+
 def print_state(
     state: sqm.states.RobotState,
     title: Optional[str] = None,
-    timestamp: Optional[datetime] = None,
+    timestamp: Optional[float] = None,
     include_env: bool = False,
 ) -> None:
     """Output the robot state to the console."""
@@ -350,7 +381,7 @@ def print_state(
         p_title = "RobotState"
 
     if timestamp:
-        ts_str = timestamp.strftime("%H:%M:%S.%f")
+        ts_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S.%f")
         p_title += f" @ {ts_str}"
 
     if include_env:
@@ -382,7 +413,7 @@ def print_state(
 def print_movements(
     movements: List[sqm.Movement],
     title: Optional[str] = None,
-    timestamp: Optional[datetime] = None,
+    timestamp: Optional[float] = None,
 ) -> None:
     """Output the movement state(s) to the console."""
     mvmt_lines = [
@@ -394,7 +425,7 @@ def print_movements(
         p_title = "Movements"
 
     if timestamp:
-        ts_str = timestamp.strftime("%H:%M:%S.%f")
+        ts_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S.%f")
         p_title += f" @ {ts_str}"
 
     print(p_title)
@@ -424,9 +455,9 @@ def prep_output_file(file: str, x_name: str, y_names: Iterable[str]) -> str:
     return f_path
 
 
-def write_output_line(file: str, x: datetime, ys: Iterable[Any]) -> None:
+def write_output_line(file: str, x: float, ys: Iterable[Any]) -> None:
     """Writes a single line of results/output to the file."""
-    items = [x.strftime("%Y-%m-%d %H:%M:%S.%f")]
+    items = [datetime.fromtimestamp(x).strftime("%Y-%m-%d %H:%M:%S.%f")]
     for y in ys:
         items.append(f"{y}")
     new_line = ",".join(items) + "\n"
@@ -443,6 +474,7 @@ def get_movements(
     state: sqm.states.RobotState,
     *,
     loop: bool = False,
+    repeat: bool = False,
 ) -> List[sqm.Movement]:
     """Gets the movement to execute with the given `name`."""
     if name == "neutral":
@@ -457,8 +489,9 @@ def get_movements(
             sqm.Movement(
                 f"{x.state.leg.name.lower()}_m_{name}",
                 x,
-                1.0 / 6.0,
+                1.0,
                 loop=loop,
+                repeat=repeat,
             )
             for x in m_ctrls
         ]
@@ -475,9 +508,9 @@ def get_movements(
             sqm.Movement(
                 f"{x.state.leg.name.lower()}_m_{name}",
                 x,
-                12.0,
-                TimeType.MINUTE,
+                6.0,
                 loop=loop,
+                repeat=repeat,
             )
             for x in m_ctrls
         ]
@@ -501,9 +534,30 @@ def get_movements(
             sqm.Movement(
                 f"{x.state.leg.name.lower()}_m_{name}",
                 x,
-                1.0,
+                2.5,
                 TimeType.SECOND,
                 loop=loop,
+                repeat=repeat,
+            )
+            for x in m_ctrls
+        ]
+    elif name == "fallfwd":
+        # - Fall forward
+        l_angs = (0.0, 0.0, -10.0)
+        m_ctrls = [
+            sqm.controllers.leg_linear.LegLinearThetas(state.legs.fl, *l_angs),
+            sqm.controllers.leg_linear.LegLinearThetas(state.legs.fr, *l_angs),
+            sqm.controllers.leg_linear.LegLinearThetas(state.legs.bl, *l_angs),
+            sqm.controllers.leg_linear.LegLinearThetas(state.legs.br, *l_angs),
+        ]
+        return [
+            sqm.Movement(
+                f"{x.state.leg.name.lower()}_m_{name}",
+                x,
+                2.0,
+                TimeType.SECOND,
+                loop=loop,
+                repeat=repeat,
             )
             for x in m_ctrls
         ]
@@ -594,9 +648,9 @@ def get_movements(
             sqm.Movement(
                 f"{x.state.leg.name.lower()}_m_{name}",
                 x,
-                6.0,
-                TimeType.MINUTE,
+                5.0,
                 loop=loop,
+                repeat=repeat,
             )
             for x in m_ctrls
         ]
@@ -626,10 +680,20 @@ if __name__ == "__main__":
     else:
         do_loop = False
 
+    if args.repeat:
+        do_repeat = True
+    else:
+        do_repeat = False
+
     if args.free:
         do_fixed = False
     else:
         do_fixed = True
+
+    if args.end_neutral:
+        go_back_to_neutral = True
+    else:
+        go_back_to_neutral = False
 
     # - Create robot state object & solver
     init_angs = NEUTRAL_ANGLES
@@ -667,7 +731,12 @@ if __name__ == "__main__":
     )
 
     # - Get specified movement
-    movements = get_movements(mvmt_name, robot_state, loop=do_loop)
+    movements = get_movements(
+        mvmt_name,
+        robot_state,
+        loop=do_loop,
+        repeat=do_repeat,
+    )
 
     # - Wait for graphics to load/warm-up
     print()
@@ -705,7 +774,7 @@ if __name__ == "__main__":
 
         at_neutral = False
         while not at_neutral:
-            c_ts = datetime.now()
+            c_ts = time.time()
             for n_mvmt in neutral_mvmts:
                 n_mvmt.update(c_ts)
 
@@ -716,32 +785,35 @@ if __name__ == "__main__":
             if not do_rt:
                 time.sleep(DEFAULT_TIME_STEP)
 
-            at_neutral = all(
-                x._controller.progress >= 1.0 for x in neutral_mvmts
-            )
+            at_neutral = all(x.progress >= 1.0 for x in neutral_mvmts)
+
+    # - Add SIGINT handler
+    signal.signal(signal.SIGINT, sigint_handler)
 
     # - Prepare main simulation loop
     def _while_cond_ns(_: int) -> bool:
-        return True
+        return KEEP_GOING
 
     def _while_cond_ws(x: int) -> bool:
-        return x < args.n_steps
+        if KEEP_GOING:
+            return x < args.n_steps
+        return False
 
     if args.n_steps is None:
         while_cond = _while_cond_ns
     else:
         while_cond = _while_cond_ws
 
-    m_ts = datetime.now()
+    m_ts = time.time()
     for mvmt in movements:
         mvmt.start(m_ts)
 
     # - Simulation loop
     i = 0
-    last_print = datetime.now()
-    last_write = datetime.now()
+    last_print = time.time()
+    last_write = time.time()
     while while_cond(i):
-        m_ts = datetime.now()
+        m_ts = time.time()
         for mvmt in movements:
             mvmt.update(m_ts)
 
@@ -751,7 +823,7 @@ if __name__ == "__main__":
 
         if out_path:
             if do_rt:
-                d_write = (datetime.now() - last_write).total_seconds()
+                d_write = time.time() - last_write
                 m_write = d_write >= args.output_res
             else:
                 m_write = i % args.output_res == 0
@@ -793,15 +865,15 @@ if __name__ == "__main__":
                     ),
                 )
                 if do_rt:
-                    last_write = datetime.now()
+                    last_write = time.time()
 
         if do_rt:
-            p_delta = (datetime.now() - last_print).total_seconds()
+            p_delta = time.time() - last_print
             if p_delta >= args.print_interval:
                 print_state(robot_state, timestamp=m_ts, include_env=True)
                 print_movements(movements)
                 print()
-                last_print = datetime.now()
+                last_print = time.time()
         else:
             if i % (round(1.0 / DEFAULT_TIME_STEP) * args.print_interval) == 0:
                 print_state(robot_state, timestamp=m_ts, include_env=True)
@@ -810,30 +882,33 @@ if __name__ == "__main__":
 
             time.sleep(DEFAULT_TIME_STEP)
 
-        if all(x._controller.progress >= 1.0 for x in movements):
+        if not (do_loop or do_repeat) and all(
+            x.progress >= 1.0 for x in movements
+        ):
             break
 
         i += 1
 
     # - Back to neutral
-    neutral_mvmts = get_movements("neutral", robot_state)
-    for n_mvmt in neutral_mvmts:
-        n_mvmt.start()
-
-    at_neutral = False
-    while not at_neutral:
-        c_ts = datetime.now()
+    if go_back_to_neutral:
+        neutral_mvmts = get_movements("neutral", robot_state)
         for n_mvmt in neutral_mvmts:
-            n_mvmt.update(c_ts)
+            n_mvmt.start()
 
-        update_env(robot_state, robot_kms)
-        p.stepSimulation()
-        update_state(robot_state)
+        at_neutral = False
+        while not at_neutral:
+            c_ts = time.time()
+            for n_mvmt in neutral_mvmts:
+                n_mvmt.update(c_ts)
 
-        if not do_rt:
-            time.sleep(DEFAULT_TIME_STEP)
+            update_env(robot_state, robot_kms)
+            p.stepSimulation()
+            update_state(robot_state)
 
-        at_neutral = all(x._controller.progress >= 1.0 for x in neutral_mvmts)
+            if not do_rt:
+                time.sleep(DEFAULT_TIME_STEP)
+
+            at_neutral = all(x.progress >= 1.0 for x in neutral_mvmts)
 
     print_state(robot_state, timestamp=m_ts, include_env=True)
 
