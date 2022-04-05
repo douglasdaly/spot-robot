@@ -16,6 +16,15 @@ class Movement:
     Manages a controller for a single motion.
     """
 
+    __slots__ = (
+        "_name",
+        "_controller",
+        "_duration",
+        "_loop",
+        "_repeat",
+        "_last_update",
+    )
+
     def __init__(
         self,
         name: str,

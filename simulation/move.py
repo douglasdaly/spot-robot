@@ -22,8 +22,8 @@ NEUTRAL_ANGLES = (0.0, -35.0, 10.0)
 
 DEFAULT_N_STEPS = 10000
 DEFAULT_TIME_STEP = 1.0 / 240.0
-DEFAULT_FRICTION = 1e-5
-DEFAULT_FOOT_FRICTION = 1e-6
+DEFAULT_FRICTION = 1.0
+DEFAULT_FOOT_FRICTION = 1.0
 DEFAULT_SERVO_TORQUE = 5.0
 
 KEEP_GOING = True
@@ -72,7 +72,7 @@ parser.add_argument(
     "--input-file",
     type=str,
     dest="file",
-    default="robot-simple.urdf",
+    default="robot-simple-2.urdf",
     help="Name of the URDF file to use",
 )
 parser.add_argument(
@@ -182,24 +182,8 @@ def configure(
     p.setGravity(0, 0, gravity)
 
     p.setRealTimeSimulation(1 if realtime else 0)
-
     if not realtime:
-        p.setPhysicsEngineParameter(
-            fixedTimeStep=ts_len,
-            enableFileCaching=0,
-            enableConeFriction=0,
-            erp=1e-1,
-            contactERP=0.01,
-            frictionERP=0.01,
-        )
-    else:
-        p.setPhysicsEngineParameter(
-            enableFileCaching=0,
-            enableConeFriction=0,
-            erp=1e-1,
-            contactERP=0.01,
-            frictionERP=0.01,
-        )
+        p.setTimeStep(ts_len)
 
     # - Load plane/base
     plane_id = p.loadURDF("plane.urdf")
@@ -225,7 +209,13 @@ def setup(
 
     # - Load body
     obj_path = os.path.join(ROOT_DIR, "urdf", urdf_file)
-    obj_id = p.loadURDF(obj_path, [0.0, 0.0, 0.5], useFixedBase=fixed)
+    obj_id = p.loadURDF(
+        obj_path,
+        [0.0, 0.0, 0.5],
+        # useMaximalCoordinates=False,
+        # flags=p.URDF_USE_IMPLICIT_CYLINDER,
+        useFixedBase=fixed,
+    )
 
     # - Get joint data
     joint_ids = {}
@@ -237,29 +227,15 @@ def setup(
         if j_type in ("foot", "knee", "shoulder"):
             if j_type == "foot":
                 foot_ids[j_name[:2].upper()] = j_info[0]
-                p.changeDynamics(
-                    obj_id,
-                    i,
-                    linearDamping=0,
-                    angularDamping=0,
-                    lateralFriction=foot_friction,
-                    restitution=0,
-                )
-            else:
-                p.changeDynamics(
-                    obj_id,
-                    i,
-                    lateralFriction=DEFAULT_FRICTION,
-                )
         else:
             # - Servo joint
             p.changeDynamics(
                 obj_id,
                 i,
-                lateralFriction=foot_friction,
+                # lateralFriction=foot_friction,
                 linearDamping=0.0,
                 angularDamping=0.0,
-                maxJointVelocity=3.703,
+                # maxJointVelocity=3.703,
             )
             joint_ids[j_name] = j_info[0]
 
@@ -302,6 +278,8 @@ def move_joint(
             joint_id,
             p.POSITION_CONTROL,
             targetPosition=math.radians(angle),
+            # positionGain=1.0,
+            # velocityGain=0.5,
             force=DEFAULT_SERVO_TORQUE,
         )
     return
@@ -583,6 +561,10 @@ def get_movements(
             (0.0, 0.0, 0.0),
             (0.0, 0.0, 0.0),
             (0.0, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
         ]
         fr_pts = [
             (0.0, 0.0, 0.0),
@@ -601,6 +583,10 @@ def get_movements(
             (0.0, 0.0, 0.0),
             (0.0, 0.0, 0.0),
             (0.0, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
         ]
         bl_pts = [
             (0.0, 0.0, 0.0),
@@ -619,6 +605,10 @@ def get_movements(
             (d_x, d_y, d_z),
             (d_x, -d_y, -d_z),
             (d_x, -d_y, -d_z),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
         ]
         br_pts = [
             (0.0, 0.0, 0.0),
@@ -637,6 +627,10 @@ def get_movements(
             (0.0, 0.0, 0.0),
             (0.0, 0.0, 0.0),
             (0.0, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
+            (-d_x, 0.0, 0.0),
         ]
         m_ctrls = [
             sqm.controllers.LegBezierDeltas(state.legs.fl, fl_pts),
@@ -648,7 +642,7 @@ def get_movements(
             sqm.Movement(
                 f"{x.state.leg.name.lower()}_m_{name}",
                 x,
-                5.0,
+                4.0,
                 loop=loop,
                 repeat=repeat,
             )
