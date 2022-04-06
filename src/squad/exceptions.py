@@ -29,6 +29,41 @@ class FrozenError(SquadException):
     pass
 
 
+# - Messaging
+
+
+class MessagingException(SquadException):
+    """
+    Base class for messaging-related exceptions.
+    """
+
+    pass
+
+
+class TimeoutError(MessagingException):
+    """
+    Exception thrown if a timeout limit is reached.
+    """
+
+    pass
+
+
+class AlreadySetupError(MessagingException):
+    """
+    Exception thrown if a messaging object has already been setup.
+    """
+
+    pass
+
+
+class NotReadyError(MessagingException):
+    """
+    Exception thrown if a messaging object is not ready.
+    """
+
+    pass
+
+
 # - Graphs
 
 

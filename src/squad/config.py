@@ -19,6 +19,12 @@ DEFAULT_SERIAL_TIMEOUT = 1
 
 DEFAULT_SERVO_MAX_ANGLE = 270.0
 
+DEFAULT_MESSAGE_ENCODING = "msgpack"
+DEFAULT_COMMAND_BUS = 5555
+DEFAULT_MESSAGE_BUS = 5556
+
+DEFAULT_TIMEZONE = "US/Eastern"
+
 
 @overload
 def get_env_value(
@@ -214,6 +220,31 @@ class Config:
         self.serial_timeout: int = get_env_value(
             "SERIAL_TIMEOUT",
             kwargs.get("serial_timeout", DEFAULT_SERIAL_TIMEOUT),
+        )
+
+        # Engine parameters
+        # - Messaging
+        self.message_encoding: str = get_env_value(
+            "MESSAGE_ENCODING",
+            kwargs.get("message_encoding", DEFAULT_MESSAGE_ENCODING),
+            type_=str,
+        )
+        self.message_bus: int = get_env_value(
+            "MESSAGE_BUS",
+            kwargs.get("message_bus", DEFAULT_MESSAGE_BUS),
+            type_=int,
+        )
+        self.command_bus: int = get_env_value(
+            "COMMAND_BUS",
+            kwargs.get("command_bus", DEFAULT_COMMAND_BUS),
+            type_=int,
+        )
+
+        # Misc. parameters
+        self.timezone: str = get_env_value(
+            "TIMEZONE",
+            kwargs.get("timezone", DEFAULT_TIMEZONE),
+            type_=str,
         )
 
 
