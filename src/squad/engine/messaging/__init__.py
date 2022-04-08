@@ -1,15 +1,15 @@
-from .base import Bus, Command, Endpoint, Message
-from .constants import Sender, SystemCommand
-from .utils import get_msgspec_coders, get_msgspec_topic
+from . import endpoints, messages
+from .base import Bus, Command, Message
+from .constants import Group, Sender, SystemCommand
 
 
 __all__ = [
     "Bus",
     "Command",
-    "Endpoint",
+    "Group",
     "Message",
     "Sender",
     "SystemCommand",
-    "get_msgspec_coders",
-    "get_msgspec_topic",
+    "endpoints",
+    "messages",
 ]

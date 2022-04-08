@@ -22,6 +22,16 @@ class Sender:
     """
 
     SYSTEM = "SYS"
+    ARDUINO = "ARD"
+
+
+class Group:
+    """
+    Standard group topics.
+    """
+
+    SERVO_ANGLE = "SVA"
+    IMU = "IMU"
 
 
 class SystemCommand:

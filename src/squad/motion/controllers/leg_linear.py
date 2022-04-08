@@ -1,7 +1,7 @@
 from typing import Any, Callable, List, Optional, Tuple
 
+from squad.compute.curves import linear_interpolation_function
 from squad.constants import Direction
-from squad.math import linear_interpolation_function
 
 from ..states import LegState
 from .base import StateController
