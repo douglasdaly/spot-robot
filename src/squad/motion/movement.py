@@ -2,7 +2,7 @@ from datetime import datetime
 import time
 from typing import TYPE_CHECKING, Optional
 
-from squad.constants import Direction, TimeType
+from squad.constants import Direction, TimeUnit
 from squad.utils import convert_time
 
 
@@ -30,7 +30,7 @@ class Movement:
         name: str,
         controller: "StateController",
         duration: float,
-        time_scale: TimeType = TimeType.SECOND,
+        time_scale: TimeUnit = TimeUnit.SECOND,
         *,
         loop: bool = False,
         repeat: bool = False,
@@ -42,7 +42,7 @@ class Movement:
 
         self._name = name
         self._controller = controller
-        self._duration = convert_time(duration, time_scale, TimeType.SECOND)
+        self._duration = convert_time(duration, time_scale, TimeUnit.SECOND)
         self._loop = loop
         self._repeat = repeat
         self._last_update: float = controller.state.timestamp.timestamp()

@@ -235,6 +235,14 @@ optional = false
 python-versions = ">=3.6"
 
 [[package]]
+name = "euclid"
+version = "1.2"
+description = "2D and 3D vector, matrix, quaternion and geometry module"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "executing"
 version = "0.8.2"
 description = "Get the currently executing AST node of a frame, and other information"
@@ -1266,7 +1274,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.9,<3.10"
-content-hash = "c1c0aea84261ed9490dd95a7e6b3066d11fcfa47e829c85c6fb93f9d27959150"
+content-hash = "f9ee550bbf223a3458efde9006ddb6bc1a3f73f505eca90737315736806d8281"
 
 [metadata.files]
 alabaster = [
@@ -1467,6 +1475,9 @@ docutils = [
 entrypoints = [
     {file = "entrypoints-0.4-py3-none-any.whl", hash = "sha256:f174b5ff827504fd3cd97cc3f8649f3693f51538c7e4bdf3ef002c8429d42f9f"},
     {file = "entrypoints-0.4.tar.gz", hash = "sha256:b706eddaa9218a19ebcd67b56818f05bb27589b1ca9e8d797b74affad4ccacd4"},
+]
+euclid = [
+    {file = "euclid-1.2.tar.gz", hash = "sha256:f179506dc6bb3c870e2002ad4658c53a02e518399188c2b47d955b311c97d66b"},
 ]
 executing = [
     {file = "executing-0.8.2-py2.py3-none-any.whl", hash = "sha256:32fc6077b103bd19e6494a72682d66d5763cf20a106d5aa7c5ccbea4e47b0df7"},

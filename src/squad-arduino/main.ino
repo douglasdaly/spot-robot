@@ -32,6 +32,23 @@
 #define ANG_MAX SERVO_MAX_ANGLE / 2
 #define ANG_MIN -ANG_MAX
 
+// - Board Pins
+#define PIN_FL_HIP 42
+#define PIN_FL_FEMUR 44
+#define PIN_FL_LEG 46
+
+#define PIN_FR_HIP 40
+#define PIN_FR_FEMUR 38
+#define PIN_FR_LEG 36
+
+#define PIN_BL_HIP 48
+#define PIN_BL_FEMUR 50
+#define PIN_BL_LEG 52
+
+#define PIN_BR_HIP 34
+#define PIN_BR_FEMUR 32
+#define PIN_BR_LEG 30
+
 
 // VARIABLES
 bool zeroed = false;
@@ -52,25 +69,18 @@ const float kAngleToMicroseconds = (SERVO_PWM_MAX - SERVO_PWM_MIN) / SERVO_MAX_A
 // FUNCTIONS
 
 void connectServos() {
-  // - Front Left (FL)
-  servos[0].attach(42);  // Hip
-  servos[1].attach(44);  // Femur
-  servos[2].attach(46);  // Leg
-
-  // - Front Right (FR)
-  servos[3].attach(40);  // Hip
-  servos[4].attach(38);  // Femur
-  servos[5].attach(36);  // Leg
-
-  // - Back Left (BL)
-  servos[6].attach(48);  // Hip
-  servos[7].attach(50);  // Femur
-  servos[8].attach(52);  // Leg
-
-  // - Back Right (BR)
-  servos[9].attach(34);  // Hip
-  servos[10].attach(32); // Femur
-  servos[11].attach(30); // Leg
+  servos[0].attach(PIN_FL_HIP);
+  servos[1].attach(PIN_FL_FEMUR);
+  servos[2].attach(PIN_FL_LEG);
+  servos[3].attach(PIN_FR_HIP);
+  servos[4].attach(PIN_FR_FEMUR);
+  servos[5].attach(PIN_FR_LEG);
+  servos[6].attach(PIN_BL_HIP);
+  servos[7].attach(PIN_BL_FEMUR);
+  servos[8].attach(PIN_BL_LEG);
+  servos[9].attach(PIN_BR_HIP);
+  servos[10].attach(PIN_BR_FEMUR);
+  servos[11].attach(PIN_BR_LEG);
 }
 
 void moveServos(int pulses[MAX_SERVOS]) {
