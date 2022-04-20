@@ -1,8 +1,11 @@
 /*
   Main Squad Robot Arduino controller code.
 */
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 #include <Servo.h>
 #include <math.h>
+#include <Wire.h>
 
 
 // CONSTANTS
@@ -56,6 +59,14 @@ bool zeroed = false;
 // - Servo
 Servo servos[MAX_SERVOS];
 int pulses[MAX_SERVOS];
+
+// - IMU
+Adafruit_MPU6050 mpu6050;
+sensors_event_t mpuAcc, mpuGyro, mpuTemp;
+float imuZero[3];
+float imuOut[6];
+long imuPreInterval;
+float imuInterval = 0.0;
 
 // - Timing
 unsigned long startTime;
@@ -118,6 +129,53 @@ void initPulses(float hipAngle, float femurAngle, float legAngle) {
     }
 }
 
+void calibrateIMU(unsigned int n) {
+    for (int i = 0; i < n; ++i) {
+        mpu6050.getEvent(&mpuAcc, &mpuGyro, &mpuTemp);
+
+        imuZero[0] += mpuGyro.gyro.x;
+        imuZero[1] += mpuGyro.gyro.y;
+        imuZero[2] += mpuGyro.gyro.z;
+
+        delay(10);
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        imuZero[i] /= ((float)n);
+    }
+
+    imuPreInterval = millis();
+}
+
+void updateIMU(bool output, bool clearAfter) {
+    // - Update data from IMU
+    mpu6050.getEvent(&mpuAcc, &mpuGyro, &mpuTemp);
+
+    imuInterval = (millis() - imuPreInterval) * 0.001;
+
+    imuOut[0] = mpuAcc.acceleration.x;
+    imuOut[1] = mpuAcc.acceleration.y;
+    imuOut[2] = mpuAcc.acceleration.z;
+    imuOut[3] += (mpuGyro.gyro.x - imuZero[0]) * imuInterval;
+    imuOut[4] -= (mpuGyro.gyro.y - imuZero[1]) * imuInterval;
+    imuOut[5] += (mpuGyro.gyro.z - imuZero[2]) * imuInterval;
+
+    imuPreInterval = millis();
+
+    if (output) {
+        // - Write out the data
+        Serial.write((byte *)imuOut, 24);
+        Serial.flush();
+    }
+
+    if (clearAfter) {
+        // - Zero out accumulated angles
+        for (int i = 0; i < 3; ++i) {
+            imuOut[i+3] = 0.0;
+        }
+    }
+}
+
 
 // ARDUINO
 void setup() {
@@ -127,6 +185,18 @@ void setup() {
     // Setup servos
     connectServos();
     initPulses(0.0, 0.0, 0.0);
+
+    // Initialize IMU
+    mpu6050.begin();
+    mpu6050.setAccelerometerRange(MPU6050_RANGE_2_G);
+    mpu6050.setGyroRange(MPU6050_RANGE_250_DEG);
+    mpu6050.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+    for (int i = 0; i < 3; ++i) {
+        imuZero[i] = 0.0;
+    }
+
+    imuPreInterval = millis();
 
     // Wrap-up setup
     startTime = millis();
@@ -141,6 +211,9 @@ void loop() {
 
     if (!zeroed) {
         if (loopTime - startTime >= ZERO_INTERVAL) {
+            // - Calibrate IMU
+            calibrateIMU(100);
+            updateIMU(false, true);
             zeroed = true;
         }
     } else {
@@ -180,9 +253,13 @@ void loop() {
                 }
 
                 // - Write out IMU data
+                updateIMU(true, true);
             } else {
                 buffer_in_pos++;
+                updateIMU(false, false);
             }
+        } else {
+            updateIMU(false, false);
         }
     }
 

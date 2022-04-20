@@ -9,7 +9,7 @@ from .base import BaseIO
 
 
 T_In = Tuple[float, float, float, float, float, float]
-T_Out = Tuple[int, float, float, float, float, float, float]
+T_Out = Tuple[float, float, float, float, float, float]
 
 
 class Arduino(BaseIO[T_Out, T_In]):
@@ -44,7 +44,7 @@ class Arduino(BaseIO[T_Out, T_In]):
 
         pack_pre = "<" if self._little_endian else ">"
         self.__send_fmt = f"{pack_pre}fffffffff"
-        self.__recv_fmt = f"{pack_pre}Lffffff"
+        self.__recv_fmt = f"{pack_pre}ffffff"
 
     @property
     def port(self) -> str:

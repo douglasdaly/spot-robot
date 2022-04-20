@@ -19,10 +19,9 @@ class ImuDataMessage(Message):
     IMU data message.
     """
 
-    loop_time: int
-    roll: float
-    pitch: float
-    yaw: float
     accel_x: float
     accel_y: float
     accel_z: float
+    d_roll: float
+    d_pitch: float
+    d_yaw: float

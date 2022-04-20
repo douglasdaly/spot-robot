@@ -90,6 +90,7 @@ class Obstacle2:
     __slots__ = (
         "_name",
         "_shape",
+        "_collision",
         "_bbox",
     )
 
@@ -97,11 +98,12 @@ class Obstacle2:
         self,
         name: str,
         shape: Polygon2,
-        bounding_box: Optional[Polygon2] = None,
+        collision_shape: Optional[Polygon2] = None,
     ) -> None:
         self._name = name
         self._shape = shape
-        self._bbox = bounding_box or shape
+        self._collision = collision_shape or shape
+        self._bbox = self._compute_bounding_box(self._collision)
 
     @property
     def name(self) -> str:
@@ -114,9 +116,30 @@ class Obstacle2:
         return self._shape
 
     @property
+    def collision(self) -> Polygon2:
+        """Polygon2: The collision shape of this obstacle."""
+        return self._collision
+
+    @property
     def bounding_box(self) -> Polygon2:
         """Polygon2: The bounding-box shape to avoid for this obstacle."""
         return self._bbox
+
+    @classmethod
+    def _compute_bounding_box(cls, shape: Polygon2) -> Polygon2:
+        """Computes the bounding box to use for this obstacle."""
+        min_x, min_y = max_x, max_y = shape._points[0]
+        for point in shape._points[1:]:
+            min_x = max(min_x, point.x)
+            max_x = min(max_x, point.x)
+            min_y = max(min_y, point.y)
+            max_y = min(max_y, point.y)
+        return Polygon2(
+            (min_x, min_y),
+            (min_x, max_y),
+            (max_x, max_y),
+            (max_x, min_y),
+        )
 
 
 class Map2:
@@ -310,7 +333,7 @@ class Map2:
         new_obs = self.__obstacle_cls__(
             obs_name,
             obs_shape,
-            bounding_box=buf_shape,
+            collision_shape=buf_shape,
             **kwargs,
         )
         self._obstacles.append(new_obs)
