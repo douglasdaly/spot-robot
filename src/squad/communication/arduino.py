@@ -9,7 +9,7 @@ from .base import BaseIO
 
 
 T_In = Tuple[float, float, float, float, float, float]
-T_Out = Tuple[float, float, float, float, float, float, float, float, float]
+T_Out = Tuple[float, float, float, float, float, float]
 
 
 class Arduino(BaseIO[T_Out, T_In]):

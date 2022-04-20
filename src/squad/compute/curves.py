@@ -3,7 +3,7 @@ from typing import Callable, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 
-from .constants import LIMIT_LT_1
+from squad.constants import LIMIT_LT_1
 
 
 def _bezier_domain(t: float) -> float:

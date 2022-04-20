@@ -648,6 +648,44 @@ def get_movements(
             )
             for x in m_ctrls
         ]
+    elif name == "step2":
+        d_x = 10.0
+        d_y = 15.0
+        d_z = 20.0
+        l_pts = [
+            (0.0, 0.0, d_z),
+            (0.0, d_y, d_z / 2),
+            (-d_x / 2, d_y / 2, d_z / 2),
+            (-d_x, d_y / 2, 0.0),
+            (-d_x, -d_y / 2, -d_z / 2),
+            (-d_x / 2, -d_y, -d_z / 2),
+            (0.0, 0.0, -d_z),
+            (0.0, 0.0, 0.0),
+        ]
+        l_order = [Leg.BR, Leg.FL, Leg.BL, Leg.FR]
+        m_ctrls = []
+        for leg in state.legs:
+            l_idx = l_order.index(leg.leg)
+            t_cpts = []
+            t_cpts.extend([(0.0, 0.0, 0.0) for _ in range(len(l_pts) * l_idx)])
+            if leg.leg % 2 == 1:
+                t_cpts.extend([x for x in l_pts])
+            else:
+                t_cpts.extend([(x[0], -x[1], x[2]) for x in l_pts])
+            t_cpts.extend([(0.0, 0.0, 0.0) for _ in range(len(l_pts) * l_idx)])
+            t_cpts.append((0.0, 0.0, 0.0))
+            t_cpts.extend([(d_x, 0.0, 0.0) for _ in range(3)])
+            m_ctrls.append(sqm.controllers.LegBezierDeltas(leg, t_cpts))
+        return [
+            sqm.Movement(
+                f"{x.state.leg.name.lower()}_m_{name}",
+                x,
+                15.0,
+                loop=loop,
+                repeat=repeat,
+            )
+            for x in m_ctrls
+        ]
 
     raise NotImplementedError(name)
 

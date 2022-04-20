@@ -11,6 +11,8 @@ class BodyParameters:
 
     __slots__ = (
         "_frozen",
+        "body_length_units",
+        "body_angle_units",
         "l_body",
         "w_body",
         "h_body",
@@ -35,6 +37,14 @@ class BodyParameters:
 
     def __init__(self, **kwargs: float) -> None:
         self._frozen = False
+        self.body_angle_units = kwargs.pop(
+            "body_angle_units",
+            config.body_angle_units,
+        )
+        self.body_length_units = kwargs.pop(
+            "body_length_units",
+            config.body_length_units,
+        )
         self.l_body = kwargs.pop("l_body", config.l_body)
         self.w_body = kwargs.pop("w_body", config.w_body)
         self.h_body = kwargs.pop("h_body", config.h_body)

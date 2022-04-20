@@ -483,4 +483,25 @@ class RobotState(BaseState):
             ((self._x - other._x) ** 2)
             + ((self._y - other._y) ** 2)
             + ((self._z - other._z) ** 2)
+            + ((self._roll - other._roll) ** 2)
+            + ((self._pitch - other._pitch) ** 2)
+            + ((self._yaw - other._yaw) ** 2)
+        ) ** 0.5
+
+    def pos_distance(self, other: "RobotState") -> float:
+        """The distance between the positions of two states."""
+        super().distance(other)
+        return (
+            ((self._x - other._x) ** 2)
+            + ((self._y - other._y) ** 2)
+            + ((self._z - other._z) ** 2)
+        ) ** 0.5
+
+    def orn_distance(self, other: "RobotState") -> float:
+        """The distance between the orientations of two states."""
+        super().distance(other)
+        return (
+            ((self._roll - other._roll) ** 2)
+            + ((self._pitch - other._pitch) ** 2)
+            + ((self._yaw - other._yaw) ** 2)
         ) ** 0.5

@@ -2,8 +2,8 @@ from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
+from squad.compute.curves import bezier_function
 from squad.constants import Direction
-from squad.math import bezier_function
 
 from ..states import LegState
 from .base import StateController

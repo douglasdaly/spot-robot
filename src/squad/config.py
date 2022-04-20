@@ -1,7 +1,9 @@
 import os
-from typing import Any, Literal, Optional, Type, TypeVar, overload
+from typing import Any, Callable, Literal, Optional, Type, TypeVar, overload
 
 from dotenv import load_dotenv
+
+from squad.constants import AngleType, LengthUnits, TimeUnit, VelocityUnits
 
 from .exceptions import ConfigError
 
@@ -18,6 +20,18 @@ DEFAULT_SERIAL_BAUD_RATE = 115200
 DEFAULT_SERIAL_TIMEOUT = 1
 
 DEFAULT_SERVO_MAX_ANGLE = 270.0
+DEFAULT_BODY_LENGTH_UNITS = LengthUnits.MILLIMETERS
+DEFAULT_BODY_ANGLE_UNITS = AngleType.DEGREES
+
+DEFAULT_MESSAGE_ENCODING = "msgpack"
+DEFAULT_COMMAND_BUS = 5555
+DEFAULT_MESSAGE_BUS = 5556
+
+DEFAULT_TIMEZONE = "US/Eastern"
+
+DEFAULT_LENGTH_UNITS = LengthUnits.METERS
+DEFAULT_TIME_UNITS = TimeUnit.SECOND
+DEFAULT_VELOCITY_UNITS = VelocityUnits.METERS_PER_SECOND
 
 
 @overload
@@ -27,6 +41,7 @@ def get_env_value(
     *,
     type_: Optional[Type[T]] = ...,
     raise_ex: Literal[True] = ...,
+    fmt_func: Optional[Callable[[str], T]] = ...,
 ) -> T:
     ...
 
@@ -38,6 +53,7 @@ def get_env_value(
     *,
     type_: Optional[Type[T]] = ...,
     raise_ex: Literal[False] = ...,
+    fmt_func: Optional[Callable[[str], Optional[T]]] = ...,
 ) -> Optional[T]:
     ...
 
@@ -48,6 +64,7 @@ def get_env_value(
     *,
     type_: Optional[Type[T]] = None,
     raise_ex: bool = True,
+    fmt_func: Optional[Callable[[str], Optional[T]]] = None,
 ) -> Optional[T]:
     """Gets the environment variable with the corresponding name.
 
@@ -65,6 +82,9 @@ def get_env_value(
     raise_ex : bool, default=True
         Whether or not to load an exception if the returned value would
         be ``None``.
+    fmt_func : Callable[[str], Optional[T]], optional
+        A formatting-function to create the desired object from the
+        environment value.
 
     Returns
     -------
@@ -88,13 +108,18 @@ def get_env_value(
         type_out = type_
 
     env_name = f"SR_{name.strip().upper()}"
-    env_val = os.getenv(env_name, default)
+    env_val = os.getenv(env_name)
     if env_val is None:
-        if raise_ex:
+        if default is not None:
+            return default
+        elif raise_ex:
             raise ConfigError(f"Value required for: {env_name}")
         return None
-    elif type_out == bool and isinstance(env_val, str):
-        return env_val.strip().lower() in ("true", "1")  # type: ignore
+    else:
+        if fmt_func is not None:
+            return fmt_func(env_val)
+        elif type_out == bool and isinstance(env_val, str):
+            return env_val.strip().lower() in ("true", "1")  # type: ignore
     return type_out(env_val)  # type: ignore
 
 
@@ -114,6 +139,19 @@ class Config:
         load_dotenv()
 
         # Robot specifications
+        self.body_angle_units: AngleType = get_env_value(
+            "BODY_ANGLE_UNITS",
+            kwargs.get("body_angle_units", DEFAULT_BODY_ANGLE_UNITS),
+            type_=AngleType,
+            fmt_func=AngleType.from_string,
+        )
+        self.body_length_units: LengthUnits = get_env_value(
+            "BODY_LENGTH_UNITS",
+            kwargs.get("body_length_units", DEFAULT_BODY_LENGTH_UNITS),
+            type_=LengthUnits,
+            fmt_func=LengthUnits.from_string,
+        )
+
         # - Body dimensions (in mm)
         self.l_body: float = get_env_value("L_BODY", kwargs.get("l_body"))
         self.w_body: float = get_env_value("W_BODY", kwargs.get("w_body"))
@@ -214,6 +252,45 @@ class Config:
         self.serial_timeout: int = get_env_value(
             "SERIAL_TIMEOUT",
             kwargs.get("serial_timeout", DEFAULT_SERIAL_TIMEOUT),
+        )
+
+        # Navigation parameters
+        self.nav_length_units: LengthUnits = get_env_value(
+            "NAV_LENGTH_UNITS",
+            kwargs.get("nav_length_units", DEFAULT_LENGTH_UNITS),
+            type_=LengthUnits,
+            fmt_func=LengthUnits.from_string,
+        )
+        self.nav_velocity_units: VelocityUnits = get_env_value(
+            "NAV_VELOCITY_UNITS",
+            kwargs.get("nav_velocity_units", DEFAULT_VELOCITY_UNITS),
+            type_=VelocityUnits,
+            fmt_func=VelocityUnits.from_string,
+        )
+
+        # Engine parameters
+        # - Messaging
+        self.message_encoding: str = get_env_value(
+            "MESSAGE_ENCODING",
+            kwargs.get("message_encoding", DEFAULT_MESSAGE_ENCODING),
+            type_=str,
+        )
+        self.message_bus: int = get_env_value(
+            "MESSAGE_BUS",
+            kwargs.get("message_bus", DEFAULT_MESSAGE_BUS),
+            type_=int,
+        )
+        self.command_bus: int = get_env_value(
+            "COMMAND_BUS",
+            kwargs.get("command_bus", DEFAULT_COMMAND_BUS),
+            type_=int,
+        )
+
+        # Misc. parameters
+        self.timezone: str = get_env_value(
+            "TIMEZONE",
+            kwargs.get("timezone", DEFAULT_TIMEZONE),
+            type_=str,
         )
 
 
